@@ -10,8 +10,9 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 from tortoise.exceptions import DoesNotExist
 
-from kzkitty.api import (APIError, APIMapError, SteamError, SteamValueError,
-                         avatar_for_steamid64, map_for_name, pbs_for_steamid64,
+from kzkitty.api import (APIError, APIMapError, APIMapAmbiguousError,
+                         SteamError, SteamValueError, avatar_for_steamid64,
+                         map_for_name, pbs_for_steamid64,
                          steamid64_for_profile)
 from kzkitty.gateway import GatewayBot
 from kzkitty.models import Mode, User
@@ -102,7 +103,16 @@ async def slash_pb(ctx: GatewayContext,
 
     try:
         api_map = await map_for_name(map_name, mode)
-        pbs = await pbs_for_steamid64(user.steamid64, map_name, mode)
+        pbs = await pbs_for_steamid64(user.steamid64, api_map.name, mode)
+    except APIMapAmbiguousError as e:
+        if len(e.db_maps) > 10:
+            await ctx.respond(f'More than 10 maps found!',
+                              flags=MessageFlag.EPHEMERAL)
+        else:
+            map_names = sorted(m.name for m in e.db_maps)
+            await ctx.respond(f"Multiple maps found: {', '.join(map_names)}",
+                              flags=MessageFlag.EPHEMERAL)
+        return
     except APIMapError:
         await ctx.respond('Map not found!', flags=MessageFlag.EPHEMERAL)
         return
@@ -110,7 +120,6 @@ async def slash_pb(ctx: GatewayContext,
         await ctx.respond("Couldn't access global API!",
                           flags=MessageFlag.EPHEMERAL)
         return
-
 
     if teleports == 'pro':
         pbs = [pb for pb in pbs if pb.teleports == 0]

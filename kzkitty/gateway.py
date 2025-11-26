@@ -3,19 +3,15 @@ import logging
 import os
 
 import hikari
-from tortoise import Tortoise
 
-from kzkitty.models import Mode, User
+from kzkitty.api import APIError, refresh_db_maps
+from kzkitty.models import Mode, User, close_db, init_db
 
 logger = logging.getLogger('kzkitty.gateway')
 
 class GatewayBot(hikari.GatewayBot):
     async def start(self, *args, **kwargs) -> None:
-        await Tortoise.init(
-            db_url='sqlite://kzkitty.db',
-            modules={'models': ['kzkitty.models']},
-        )
-        await Tortoise.generate_schemas()
+        await init_db()
 
         initial_user_file = os.environ.get('KZKITTY_INITIAL_USERS')
         if initial_user_file is not None:
@@ -31,8 +27,16 @@ class GatewayBot(hikari.GatewayBot):
                 logger.info('Imported %d users from %s', len(users),
                             initial_user_file)
 
+        try:
+            new, updated = await refresh_db_maps()
+        except APIError:
+            logger.exception('Failed to refresh map database')
+        else:
+            logger.info('Refreshed map database (%d new, %d updated)',
+                        new, updated)
+
         await super().start(*args, **kwargs)
 
     async def close(self) -> None:
-        await Tortoise.close_connections()
+        await close_db()
         await super().close()

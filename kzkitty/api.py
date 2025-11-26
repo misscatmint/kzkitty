@@ -6,8 +6,9 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 from aiohttp import ClientError, ClientSession
+from tortoise.exceptions import DoesNotExist
 
-from kzkitty.models import Mode
+from kzkitty.models import Map, Mode
 
 logger = logging.getLogger('kzkitty.api')
 
@@ -29,8 +30,12 @@ class APIError(Exception):
 class APIMapError(APIError):
     pass
 
+class APIMapAmbiguousError(APIMapError):
+    def __init__(self, db_maps):
+        self.db_maps = db_maps
+
 @dataclass
-class Map:
+class APIMap:
     name: str
     tier: int
     vnl_tier: int | None
@@ -103,6 +108,39 @@ async def avatar_for_steamid64(steamid64: int) -> bytes:
         logger.exception("Couldn't get Steam profile")
         raise SteamError
 
+async def _vnl_tiers() -> dict[str, tuple[int, int]]:
+    url = 'https://vnl.kz/api/maps'
+    try:
+        async with ClientSession() as session:
+            async with session.get(url) as r:
+                if r.status != 200:
+                    logger.error("Couldn't get vnl.kz API maps (HTTP %d)",
+                                 r.status)
+                    return {}
+                json = await r.json()
+    except ClientError:
+        logger.exception("Couldn't get vnl.kz API maps")
+        return {}
+
+    if not isinstance(json, list):
+        logger.error('Malformed global API maps response (not a list)')
+        return {}
+
+    maps = {}
+    for map_info in json:
+        name = map_info.get('name')
+        if not isinstance(name, str):
+            logger.error('Malformed global API maps response (name not a str)')
+            continue
+        tp_tier = map_info.get('tpTier')
+        pro_tier = map_info.get('proTier')
+        if not isinstance(tp_tier, int) or not isinstance(pro_tier, int):
+            logger.error('Malformed global API maps response'
+                         ' (tp/pro tiers not ints)')
+            continue
+        maps[name] = (tp_tier, pro_tier)
+    return maps
+
 async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
     url = f'https://vnl.kz/api/maps/{name}'
     try:
@@ -130,39 +168,7 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
         pro_tier = None
     return tp_tier, pro_tier
 
-async def map_for_name(name: str, mode: Mode) -> Map:
-    if not re.fullmatch('[A-za-z0-9_]+', name):
-        raise APIMapError
-
-    json = {}
-    url = f'https://kztimerglobal.com/api/v2.0/maps/name/{name}'
-    try:
-        async with ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    logger.error("Couldn't get global API map (HTTP %d)",
-                                 r.status)
-                    raise APIError
-                json = await r.json()
-    except ClientError:
-        logger.exception("Couldn't get global API map")
-        raise APIError
-
-    if json is None:
-        raise APIMapError
-    elif not isinstance(json, dict):
-        logger.error('Malformed global API map response (not a dict)')
-        raise APIError
-    tier = json.get('difficulty')
-    if not isinstance(tier, int):
-        logger.error('Malformed global API map response (tier not an int)')
-        raise APIError
-
-    if mode == Mode.VNL:
-        vnl_tier, vnl_pro_tier = await _vnl_tiers_for_map(name)
-    else:
-        vnl_tier = vnl_pro_tier = None
-
+async def _thumbnail_for_map(name: str) -> bytes | None:
     thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
                      f'map-images/public/webp/medium/{name}.webp')
     thumbnail = None
@@ -176,10 +182,131 @@ async def map_for_name(name: str, mode: Mode) -> Map:
                                  r.status)
     except ClientError:
         logger.exception("Couldn't get map thumbnail")
-        pass
+    return thumbnail
 
-    return Map(name=name, tier=tier, vnl_tier=vnl_tier,
-               vnl_pro_tier=vnl_pro_tier, thumbnail=thumbnail)
+async def refresh_db_maps() -> tuple[int, int]:
+    logger.info('Downloading map tiers')
+    url = ('https://kztimerglobal.com/api/v2.0'
+           '/maps?is_validated=true&limit=9999')
+    try:
+        async with ClientSession() as session:
+            async with session.get(url) as r:
+                if r.status != 200:
+                    logger.error("Couldn't get global API maps (HTTP %d)",
+                                 r.status)
+                    raise APIError
+                json = await r.json()
+    except ClientError:
+        logger.exception("Couldn't get global API maps")
+        raise APIError
+
+    if not isinstance(json, list):
+        logger.error('Malformed global API maps response (not a list)')
+        raise APIError
+
+    logger.info('Downloading VNL map tiers')
+    vnl_tiers = await _vnl_tiers()
+
+    new = 0
+    updated = 0
+    for map_info in json:
+        name = map_info.get('name')
+        if not isinstance(name, str):
+            logger.error('Malformed global API maps response (name not a str)')
+            continue
+        tier = map_info.get('difficulty')
+        if not isinstance(tier, int):
+            logger.error('Malformed global API maps response'
+                         ' (tier not an int)')
+            continue
+        vnl_tier, vnl_pro_tier = vnl_tiers.get(name, (None, None))
+        try:
+            db_map = await Map.get(name=name)
+        except DoesNotExist:
+            logger.info('Downloading thumbnail for map %s', name)
+            thumbnail = await _thumbnail_for_map(name)
+            await Map(name=name, tier=tier, vnl_tier=vnl_tier,
+                      vnl_pro_tier=vnl_pro_tier, thumbnail=thumbnail).save()
+            new += 1
+        else:
+            thumbnail = db_map.thumbnail
+            if thumbnail is None:
+                thumbnail = await _thumbnail_for_map(name)
+            changed = False
+            if db_map.tier != tier:
+                logger.info('Updating tier for map %s', name)
+                db_map.tier = tier
+                changed = True
+            if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
+                logger.info('Updating VNL tier for map %s', name)
+                db_map.vnl_tier = vnl_tier
+                changed = True
+            if (db_map.vnl_pro_tier != vnl_pro_tier and
+                vnl_pro_tier is not None):
+                logger.info('Updating VNL pro tier for map %s', name)
+                db_map.vnl_pro_tier = vnl_pro_tier
+                changed = True
+            if db_map.thumbnail != thumbnail and thumbnail is not None:
+                logger.info('Updating thumbnail for map %s', name)
+                db_map.thumbnail = thumbnail
+                changed = True
+            if changed:
+                await db_map.save()
+                updated += 1
+    return new, updated
+
+async def map_for_name(name: str, mode: Mode) -> APIMap:
+    if not re.fullmatch('[A-za-z0-9_]+', name):
+        raise APIMapError
+
+    try:
+        db_map = await Map.get(name__iexact=name)
+    except DoesNotExist:
+        db_maps = list(await Map.filter(name__icontains=name))
+        if len(db_maps) > 1:
+            raise APIMapAmbiguousError(db_maps)
+        db_map = db_maps[0]
+
+    if db_map is not None:
+        name = db_map.name
+        tier = db_map.tier
+        vnl_tier = db_map.vnl_tier
+        vnl_pro_tier = db_map.vnl_pro_tier
+        thumbnail = db_map.thumbnail
+    else:
+        json = {}
+        url = f'https://kztimerglobal.com/api/v2.0/maps/name/{name}'
+        try:
+            async with ClientSession() as session:
+                async with session.get(url) as r:
+                    if r.status != 200:
+                        logger.error("Couldn't get global API map (HTTP %d)",
+                                     r.status)
+                        raise APIError
+                    json = await r.json()
+        except ClientError:
+            logger.exception("Couldn't get global API map")
+            raise APIError
+
+        if json is None:
+            raise APIMapError
+        elif not isinstance(json, dict):
+            logger.error('Malformed global API map response (not a dict)')
+            raise APIError
+        tier = json.get('difficulty')
+        if not isinstance(tier, int):
+            logger.error('Malformed global API map response (tier not an int)')
+            raise APIError
+        vnl_tier = vnl_pro_tier = thumbnail = None
+
+    if mode == Mode.VNL and (vnl_tier is None or vnl_pro_tier is None):
+        vnl_tier, vnl_pro_tier = await _vnl_tiers_for_map(name)
+
+    if thumbnail is None:
+        thumbnail = await _thumbnail_for_map(name)
+
+    return APIMap(name=name, tier=tier, vnl_tier=vnl_tier,
+                  vnl_pro_tier=vnl_pro_tier, thumbnail=thumbnail)
 
 async def pbs_for_steamid64(steamid64: int, map_name: str, mode: Mode
                             ) -> list[PersonalBest]:
