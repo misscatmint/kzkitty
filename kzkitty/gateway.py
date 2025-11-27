@@ -26,8 +26,9 @@ class GatewayBot(hikari.GatewayBot):
                                             steamid64=int(row['steamid64']),
                                             mode=Mode(row['mode'])))
             await Player.bulk_create(users)
-            logger.info('Imported %d players from %s', len(users),
-                        default_player_file)
+            if users:
+                logger.info('Imported %d players from %s', len(users),
+                            default_player_file)
 
         try:
             new, updated = await refresh_db_maps()
