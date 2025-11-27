@@ -1,3 +1,4 @@
+import os
 from enum import StrEnum
 
 from tortoise import Model, Tortoise, fields
@@ -21,7 +22,7 @@ class Player(Model):
 
 async def init_db() -> None:
     await Tortoise.init(
-        db_url='sqlite://kzkitty.db',
+        db_url=f"sqlite://{os.environ['KZKITTY_DB']}",
         modules={'models': ['kzkitty.models']},
     )
     await Tortoise.generate_schemas()
