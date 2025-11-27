@@ -349,7 +349,7 @@ async def pbs_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode
                 Mode.VNL: 'kz_vanilla'}[mode]
     url = ('https://kztimerglobal.com/api/v2.0/records/top?'
            f'steamid64={steamid64}&map_name={api_map.name}&stage=0&'
-           f'modes_list_string={api_mode}')
+           f'tickrate=128&modes_list_string={api_mode}')
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -373,7 +373,7 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode
                 Mode.VNL: 'kz_vanilla'}[mode]
     url = ('https://kztimerglobal.com/api/v2.0/records/top?'
            f'steamid64={steamid64}&stage=0&limit=9999&has_teleports=true&'
-           f'modes_list_string={api_mode}')
+           f'tickrate=128&modes_list_string={api_mode}')
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -390,7 +390,7 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode
         raise APIError
     url = ('https://kztimerglobal.com/api/v2.0/records/top?'
            f'steamid64={steamid64}&stage=0&limit=9999&has_teleports=false&'
-           f'modes_list_string={api_mode}')
+           f'tickrate=128&modes_list_string={api_mode}')
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
