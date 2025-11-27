@@ -76,7 +76,7 @@ def _formattime(td: timedelta) -> str:
     else:
         s = '%d' % ss
     if td.days:
-        def plural(n):
+        def plural(n: int) -> tuple[int, str]:
             return n, abs(n) != 1 and 's' or ''
         s = ('%d day%s, ' % plural(td.days)) + s
     if td.microseconds:
