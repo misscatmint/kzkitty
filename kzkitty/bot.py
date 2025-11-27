@@ -4,7 +4,7 @@ from typing import Any
 
 from arc import (GatewayClient, GatewayContext, MemberParams, Option,
                  StrParams, slash_command)
-from hikari import Member, MessageFlag
+from hikari import Color, Member, MessageFlag
 from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
@@ -120,7 +120,11 @@ async def _pb_component(ctx: GatewayContext, player: Player,
     body += f"""**Points:** {pb.points}
 """
 
-    container = ContainerComponentBuilder()
+    if pb.teleports == 0:
+        accent_color = Color(0x1e90ff)
+    else:
+        accent_color = Color(0xffa500)
+    container = ContainerComponentBuilder(accent_color=accent_color)
     try:
         avatar = await avatar_for_steamid64(player.steamid64)
     except SteamError:
