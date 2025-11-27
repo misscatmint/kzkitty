@@ -23,6 +23,7 @@ client = GatewayClient(bot)
 
 ModeParams = StrParams('Game mode', name='mode',
                        choices=['kzt', 'skz', 'vnl'])
+PlayerParams = MemberParams('Player', name='player')
 TeleportParams = StrParams('Pro or teleport run', name='teleports',
                            choices=['pro', 'tp'])
 
@@ -144,10 +145,10 @@ async def slash_pb(ctx: GatewayContext,
                    map_name: Option[str, StrParams('Map name', name='map')],
                    teleports: Option[str | None, TeleportParams]=None,
                    mode_name: Option[str | None, ModeParams]=None,
-                   player: Option[Member | None, MemberParams('Player')]=None
+                   player_member: Option[Member | None, PlayerParams]=None
                    ) -> None:
     try:
-        player = await Player.get(id=player or ctx.user.id)
+        player = await Player.get(id=(player_member or ctx.user).id)
     except DoesNotExist:
         await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
         return
@@ -194,11 +195,10 @@ async def slash_pb(ctx: GatewayContext,
 @slash_command('latest', 'Show most recent personal best')
 async def slash_latest(ctx: GatewayContext,
                        mode_name: Option[str | None, ModeParams]=None,
-                       player: Option[Member | None,
-                                      MemberParams('Player')]=None
+                       player_member: Option[Member | None, PlayerParams]=None
                        ) -> None:
     try:
-        player = await Player.get(id=player or ctx.user.id)
+        player = await Player.get(id=(player_member or ctx.user).id)
     except DoesNotExist:
         await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
         return
