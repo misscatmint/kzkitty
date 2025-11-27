@@ -3,6 +3,7 @@ import logging
 import os
 
 import hikari
+from aiocron import crontab
 
 from kzkitty.api import APIError, refresh_db_maps
 from kzkitty.models import Mode, Player, close_db, init_db
@@ -34,6 +35,8 @@ class GatewayBot(hikari.GatewayBot):
         else:
             logger.info('Refreshed map database (%d new, %d updated)',
                         new, updated)
+
+        crontab('0 0 * * *', func=refresh_db_maps)
 
         await super().start(*args, **kwargs)
 

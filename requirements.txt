@@ -1,3 +1,4 @@
+aiocron==2.1
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.2
 aiosignal==1.4.0
@@ -6,6 +7,7 @@ alluka==0.3.3
 attrs==25.4.0
 cffi==2.0.0
 colorlog==6.10.1
+cronsim==2.7
 frozenlist==1.8.0
 hikari==2.5.0
 hikari-arc==2.1.1
@@ -16,8 +18,11 @@ propcache==0.4.1
 pycparser==2.23
 pynacl==1.6.1
 pypika-tortoise==0.6.2
+python-dateutil==2.9.0.post0
 pytz==2025.2
+six==1.17.0
 tortoise-orm==0.25.1
 typing-extensions==4.15.0
+tzlocal==5.3.1
 uvloop==0.22.1
 yarl==1.22.0
