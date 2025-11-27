@@ -194,6 +194,7 @@ async def slash_pb(ctx: GatewayContext,
 @client.include
 @slash_command('latest', 'Show most recent personal best')
 async def slash_latest(ctx: GatewayContext,
+                       teleports: Option[str | None, TeleportParams]=None,
                        mode_name: Option[str | None, ModeParams]=None,
                        player_member: Option[Member | None, PlayerParams]=None
                        ) -> None:
@@ -207,7 +208,7 @@ async def slash_latest(ctx: GatewayContext,
     else:
         mode = Mode(mode_name)
 
-    pb = await latest_pb_for_steamid64(player.steamid64, mode)
+    pb = await latest_pb_for_steamid64(player.steamid64, mode, teleports)
     if not pb:
         await ctx.respond("No PB found!",
                           flags=MessageFlag.EPHEMERAL)
