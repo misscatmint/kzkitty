@@ -46,7 +46,7 @@ async def slash_register(ctx: GatewayContext,
         if mode_name is not None:
             defaults['mode'] = mode_name
         await Player.update_or_create(id=ctx.user.id, defaults=defaults)
-        await ctx.respond(f'Registered!', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('Registered!', flags=MessageFlag.EPHEMERAL)
 
 @client.include
 @slash_command('mode', 'Show or set default game mode')
@@ -154,7 +154,7 @@ async def slash_pb(ctx: GatewayContext,
         pbs = await pbs_for_steamid64(player.steamid64, api_map, mode)
     except APIMapAmbiguousError as e:
         if len(e.db_maps) > 10:
-            await ctx.respond(f'More than 10 maps found!',
+            await ctx.respond('More than 10 maps found!',
                               flags=MessageFlag.EPHEMERAL)
         else:
             map_names = sorted(m.name for m in e.db_maps)
