@@ -318,6 +318,39 @@ def _mode_for_record(record: dict) -> Mode:
         raise APIError
     return mode
 
+async def _records_for_steamid64(steamid64: int, mode: Mode,
+                                 teleport_type: Type=Type.ANY,
+                                 api_map: APIMap | None=None) -> list[dict]:
+    api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
+                Mode.VNL: 'kz_vanilla'}[mode]
+    url = ('https://kztimerglobal.com/api/v2.0/records/top?'
+           f'steamid64={steamid64}&stage=0&limit=9999&tickrate=128&'
+           f'modes_list_string={api_mode}')
+    if teleport_type == Type.TP:
+        url += '&has_teleports=true'
+    elif teleport_type == Type.PRO:
+        url += '&has_teleports=false'
+    if api_map is not None:
+        url += f'&map_name={api_map.name}'
+    try:
+        async with ClientSession() as session:
+            async with session.get(url) as r:
+                if r.status != 200:
+                    logger.error("Couldn't get global API PBs (HTTP %d)",
+                                 r.status)
+                    raise APIError
+                records = await r.json()
+    except ClientError:
+        logger.exception("Couldn't get global API PBs")
+        raise APIError
+    if not isinstance(records, list):
+        logger.error('Malformed global API PBs (not a list)')
+        raise APIError
+    if records and not isinstance(records[0], dict):
+        logger.error('Malformed global API PBs (not a list of dicts)')
+        raise APIError
+    return records
+
 def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
     player_name = record.get('player_name')
     if not isinstance(player_name, str) and player_name is not None:
@@ -347,78 +380,30 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
 
 async def pbs_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode
                             ) -> list[PersonalBest]:
-    api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
-                Mode.VNL: 'kz_vanilla'}[mode]
-    url = ('https://kztimerglobal.com/api/v2.0/records/top?'
-           f'steamid64={steamid64}&map_name={api_map.name}&stage=0&'
-           f'tickrate=128&modes_list_string={api_mode}')
-    try:
-        async with ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    logger.error("Couldn't get global API PBs (HTTP %d)",
-                                 r.status)
-                    raise APIError
-                records = await r.json()
-    except ClientError:
-        logger.exception("Couldn't get global API PBs")
-        raise APIError
-    if not isinstance(records, list):
-        logger.error('Malformed global API PBs (not a list)')
-        raise APIError
-
+    records = await _records_for_steamid64(steamid64, mode, api_map=api_map)
     return [_record_to_pb(record, api_map) for record in records]
 
 async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
                                   teleport_type: Type=Type.ANY,
                                   ) -> PersonalBest | None:
-    api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
-                Mode.VNL: 'kz_vanilla'}[mode]
+
     if teleport_type in {Type.TP, Type.ANY}:
-        url = ('https://kztimerglobal.com/api/v2.0/records/top?'
-               f'steamid64={steamid64}&stage=0&limit=9999&has_teleports=true&'
-               f'tickrate=128&modes_list_string={api_mode}')
-        try:
-            async with ClientSession() as session:
-                async with session.get(url) as r:
-                    if r.status != 200:
-                        logger.error("Couldn't get global API PBs (HTTP %d)",
-                                     r.status)
-                        raise APIError
-                    records = await r.json()
-        except ClientError:
-            logger.exception("Couldn't get global API PBs")
-            raise APIError
-        if not isinstance(records, list):
-            logger.error('Malformed global API PBs (not a list)')
-            raise APIError
+        records = await _records_for_steamid64(steamid64, mode,
+                                               teleport_type=Type.TP)
     else:
         records = []
     if teleport_type in {Type.PRO, Type.ANY}:
-        url = ('https://kztimerglobal.com/api/v2.0/records/top?'
-               f'steamid64={steamid64}&stage=0&limit=9999&has_teleports=false&'
-               f'tickrate=128&modes_list_string={api_mode}')
-        try:
-            async with ClientSession() as session:
-                async with session.get(url) as r:
-                    if r.status != 200:
-                        logger.error("Couldn't get global API PBs (HTTP %d)",
-                                     r.status)
-                        raise APIError
-                    pros = await r.json()
-        except ClientError:
-            logger.exception("Couldn't get global API PBs")
-            raise APIError
-        if not isinstance(pros, list):
-            logger.error('Malformed global API PBs (not a list)')
-            raise APIError
+        pros = await _records_for_steamid64(steamid64, mode,
+                                            teleport_type=Type.PRO)
     else:
         pros = []
     records.extend(pros)
     if not records:
         return None
 
-    records.sort(key=lambda i: i.get('created_on'), reverse=True)
+    def sort_key(i: dict[str, str]) -> str:
+        return i.get('created_on', '')
+    records.sort(key=sort_key, reverse=True)
     record = records[0]
     mode = _mode_for_record(record)
     api_map = await map_for_name(record.get('map_name', ''), mode)
