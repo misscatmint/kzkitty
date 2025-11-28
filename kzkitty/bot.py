@@ -18,7 +18,7 @@ from kzkitty.api import (APIError, APIMapError, APIMapAmbiguousError,
 from kzkitty.gateway import GatewayBot
 from kzkitty.models import Mode, Player
 
-bot = GatewayBot(os.environ['DISCORD_TOKEN'])
+bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'])
 client = GatewayClient(bot)
 
 ModeParams = StrParams('Game mode', name='mode',
