@@ -440,7 +440,7 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
                                             teleport_type=Type.PRO)
     else:
         pros = []
-    records.extend(pros)
+    records += pros
     if not records:
         return None
 
