@@ -3,6 +3,11 @@ from enum import StrEnum
 
 from tortoise import Model, Tortoise, fields
 
+class Type(StrEnum):
+    TP = 'tp'
+    PRO = 'pro'
+    ANY = 'any'
+
 class Mode(StrEnum):
     KZT = 'kzt'
     SKZ = 'skz'

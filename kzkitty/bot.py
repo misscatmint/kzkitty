@@ -16,16 +16,16 @@ from kzkitty.api import (APIError, APIMapError, APIMapAmbiguousError,
                          map_for_name, pbs_for_steamid64,
                          steamid64_for_profile)
 from kzkitty.gateway import GatewayBot
-from kzkitty.models import Mode, Player
+from kzkitty.models import Mode, Player, Type
 
 bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'])
 client = GatewayClient(bot)
 
 ModeParams = StrParams('Game mode', name='mode',
-                       choices=['kzt', 'skz', 'vnl'])
+                       choices=[Mode.KZT, Mode.SKZ, Mode.VNL])
 PlayerParams = MemberParams('Player', name='player')
-TeleportParams = StrParams('Pro or teleport run', name='teleports',
-                           choices=['pro', 'tp'])
+TypeParams = StrParams('Pro or teleport run', name='type',
+                       choices=[Type.PRO, Type.TP, Type.ANY])
 
 @client.include
 @slash_command('register', 'Register account')
@@ -135,7 +135,7 @@ async def _pb_component(ctx: GatewayContext, player: Player,
 @slash_command('pb', 'Show personal best times')
 async def slash_pb(ctx: GatewayContext,
                    map_name: Option[str, StrParams('Map name', name='map')],
-                   teleports: Option[str | None, TeleportParams]=None,
+                   type_name: Option[str, TypeParams]=Type.ANY,
                    mode_name: Option[str | None, ModeParams]=None,
                    player_member: Option[Member | None, PlayerParams]=None
                    ) -> None:
@@ -169,9 +169,10 @@ async def slash_pb(ctx: GatewayContext,
                           flags=MessageFlag.EPHEMERAL)
         return
 
-    if teleports == 'pro':
+    teleport_type = Type(type_name)
+    if teleport_type == Type.PRO:
         pbs = [pb for pb in pbs if pb.teleports == 0]
-    elif teleports == 'tp':
+    elif teleport_type == Type.TP:
         pbs = [pb for pb in pbs if pb.teleports]
     if not pbs:
         await ctx.respond('No PBs found!', flags=MessageFlag.EPHEMERAL)
@@ -185,7 +186,7 @@ async def slash_pb(ctx: GatewayContext,
 @client.include
 @slash_command('latest', 'Show most recent personal best')
 async def slash_latest(ctx: GatewayContext,
-                       teleports: Option[str | None, TeleportParams]=None,
+                       type_name: Option[str, TypeParams]=Type.ANY,
                        mode_name: Option[str | None, ModeParams]=None,
                        player_member: Option[Member | None, PlayerParams]=None
                        ) -> None:
@@ -199,7 +200,7 @@ async def slash_latest(ctx: GatewayContext,
     else:
         mode = Mode(mode_name)
 
-    pb = await latest_pb_for_steamid64(player.steamid64, mode, teleports)
+    pb = await latest_pb_for_steamid64(player.steamid64, mode, Type(type_name))
     if not pb:
         await ctx.respond("No PB found!",
                           flags=MessageFlag.EPHEMERAL)

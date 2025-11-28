@@ -8,7 +8,7 @@ from xml.etree import ElementTree
 from aiohttp import ClientError, ClientSession
 from tortoise.exceptions import DoesNotExist
 
-from kzkitty.models import Map, Mode
+from kzkitty.models import Map, Mode, Type
 
 logger = logging.getLogger('kzkitty.api')
 
@@ -370,11 +370,11 @@ async def pbs_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode
     return [_record_to_pb(record, api_map) for record in records]
 
 async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
-                                  teleports: str | None=None
+                                  teleport_type: Type=Type.ANY,
                                   ) -> PersonalBest | None:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
-    if teleports == 'tp' or teleports is None:
+    if teleport_type in {Type.TP, Type.ANY}:
         url = ('https://kztimerglobal.com/api/v2.0/records/top?'
                f'steamid64={steamid64}&stage=0&limit=9999&has_teleports=true&'
                f'tickrate=128&modes_list_string={api_mode}')
@@ -394,7 +394,7 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
             raise APIError
     else:
         records = []
-    if teleports == 'pro' or teleports is None:
+    if teleport_type in {Type.PRO, Type.ANY}:
         url = ('https://kztimerglobal.com/api/v2.0/records/top?'
                f'steamid64={steamid64}&stage=0&limit=9999&has_teleports=false&'
                f'tickrate=128&modes_list_string={api_mode}')
