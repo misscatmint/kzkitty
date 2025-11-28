@@ -1,20 +1,17 @@
 import os
-from datetime import timedelta
 from typing import Any
 
 from arc import (GatewayClient, GatewayContext, MemberParams, Option,
                  StrParams, slash_command)
-from hikari import Color, Member, MessageFlag
-from hikari.impl import (ContainerComponentBuilder,
-                         MediaGalleryComponentBuilder,
-                         SectionComponentBuilder, ThumbnailComponentBuilder)
+from hikari import Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api import (APIError, APIMapError, APIMapAmbiguousError,
-                         PersonalBest, SteamError, SteamValueError,
-                         avatar_for_steamid64, latest_pb_for_steamid64,
+                         SteamError, SteamValueError,
+                         latest_pb_for_steamid64,
                          map_for_name, pbs_for_steamid64,
-                         steamid64_for_profile)
+                         profile_for_steamid64, steamid64_for_profile)
+from kzkitty.components import pb_component, profile_component
 from kzkitty.gateway import GatewayBot
 from kzkitty.models import Mode, Player, Type
 
@@ -67,70 +64,6 @@ async def slash_mode(ctx: GatewayContext,
     await ctx.respond(f'Mode set to {mode_name}.',
                       flags=MessageFlag.EPHEMERAL)
 
-def _formattime(td: timedelta) -> str:
-    mm, ss = divmod(td.seconds, 60)
-    hh, mm = divmod(mm, 60)
-    if hh:
-        s = '%d:%02d:%02d' % (hh, mm, ss)
-    elif mm:
-        s = '%d:%02d' % (mm, ss)
-    else:
-        s = '%d' % ss
-    if td.days:
-        def plural(n: int) -> tuple[int, str]:
-            return n, abs(n) != 1 and 's' or ''
-        s = ('%d day%s, ' % plural(td.days)) + s
-    if td.microseconds:
-        s = s + '.%06d' % td.microseconds
-        s = s.rstrip('0').rstrip('.')
-    return s
-
-async def _pb_component(ctx: GatewayContext, player: Player,
-                        pb: PersonalBest) -> ContainerComponentBuilder:
-    player_name = pb.player_name or ctx.user.display_name
-    if pb.mode == Mode.VNL:
-        profile_url = f'https://vnl.kz/#/stats/{player.steamid64}'
-        map_url = f'https://vnl.kz/#/map/{pb.map.name}'
-        tier = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
-    else:
-        profile_url = f'https://kzgo.eu/players/{player.steamid64}?{pb.mode}'
-        map_url = f'https://kzgo.eu/maps/{pb.map.name}?{pb.mode}'
-        tier = pb.map.tier
-    body = f"""## [{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
-
-**Mode:** {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
-**Tier:** {tier or '(unknown)'}
-**Time:** {_formattime(pb.time)}
-"""
-    if pb.teleports:
-        body += f"""**Teleports:** {pb.teleports}
-"""
-    body += f"""**Points:** {pb.points}
-"""
-
-    if pb.teleports == 0:
-        accent_color = Color(0x1e90ff)
-    else:
-        accent_color = Color(0xffa500)
-    container = ContainerComponentBuilder(accent_color=accent_color)
-    try:
-        avatar = await avatar_for_steamid64(player.steamid64)
-    except SteamError:
-        avatar = None
-    if avatar is not None:
-        thumbnail = ThumbnailComponentBuilder(media=avatar)
-        section = SectionComponentBuilder(accessory=thumbnail)
-        section.add_text_display(body)
-        container.add_component(section)
-    else:
-        container.add_text_display(body)
-    if pb.map.thumbnail is not None:
-        gallery = MediaGalleryComponentBuilder()
-        gallery.add_media_gallery_item(pb.map.thumbnail)
-        container.add_component(gallery)
-    container.add_text_display(f'-# <t:{int(pb.date.timestamp())}>')
-    return container
-
 @client.include
 @slash_command('pb', 'Show personal best times')
 async def slash_pb(ctx: GatewayContext,
@@ -180,7 +113,7 @@ async def slash_pb(ctx: GatewayContext,
 
     pbs.sort(key=lambda pb: pb.time)
     pb = pbs[0]
-    component = await _pb_component(ctx, player, pb)
+    component = await pb_component(ctx, player, pb)
     await ctx.respond(component=component)
 
 @client.include
@@ -206,5 +139,25 @@ async def slash_latest(ctx: GatewayContext,
                           flags=MessageFlag.EPHEMERAL)
         return
 
-    component = await _pb_component(ctx, player, pb)
+    component = await pb_component(ctx, player, pb)
+    await ctx.respond(component=component)
+
+@client.include
+@slash_command('profile', 'Show rank, point total, and point average')
+async def slash_profile(ctx: GatewayContext,
+                        mode_name: Option[str | None, ModeParams]=None,
+                        player_member: Option[Member | None, PlayerParams]=None
+                        ) -> None:
+    try:
+        player = await Player.get(id=(player_member or ctx.user).id)
+    except DoesNotExist:
+        await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
+        return
+    if mode_name is None:
+        mode = player.mode
+    else:
+        mode = Mode(mode_name)
+
+    profile = await profile_for_steamid64(player.steamid64, mode)
+    component = await profile_component(ctx, player, profile)
     await ctx.respond(component=component)
