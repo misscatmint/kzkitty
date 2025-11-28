@@ -259,13 +259,15 @@ async def map_for_name(name: str, mode: Mode) -> APIMap:
     if not re.fullmatch('[A-za-z0-9_]+', name):
         raise APIMapError
 
+    db_map = None
     try:
         db_map = await Map.get(name__iexact=name)
     except DoesNotExist:
         db_maps = list(await Map.filter(name__icontains=name))
         if len(db_maps) > 1:
             raise APIMapAmbiguousError(db_maps)
-        db_map = db_maps[0]
+        elif db_maps:
+            db_map = db_maps[0]
 
     if db_map is not None:
         name = db_map.name
