@@ -2,6 +2,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
@@ -34,6 +35,31 @@ class APIMapAmbiguousError(APIMapError):
     def __init__(self, db_maps):
         self.db_maps = db_maps
 
+class Rank(StrEnum):
+    NEW = 'New'
+    BEGINNER_MINUS = 'Beginner-'
+    BEGINNER = 'Beginner'
+    BEGINNER_PLUS = 'Beginner+'
+    AMATEUR_MINUS = 'Amateur-'
+    AMATEUR = 'Amateur'
+    AMATEUR_PLUS = 'Amateur+'
+    CASUAL_MINUS = 'Casual-'
+    CASUAL = 'Casual'
+    CASUAL_PLUS = 'Casual+'
+    REGULAR_MINUS = 'Regular-'
+    REGULAR = 'Regular'
+    REGULAR_PLUS = 'Regular+'
+    SKILLED_MINUS = 'Skilled-'
+    SKILLED = 'Skilled'
+    SKILLED_PLUS = 'Skilled+'
+    EXPERT_MINUS = 'Expert-'
+    EXPERT = 'Expert'
+    EXPERT_PLUS = 'Expert+'
+    SEMIPRO = 'Semipro'
+    PRO = 'Pro'
+    MASTER = 'Master'
+    LEGEND = 'Legend'
+
 @dataclass
 class APIMap:
     name: str
@@ -51,6 +77,14 @@ class PersonalBest:
     teleports: int
     points: int
     date: datetime
+
+@dataclass
+class Profile:
+    player_name: str | None
+    mode: Mode
+    rank: Rank
+    points: int
+    average: int
 
 async def _get_steam_profile(url: str) -> ElementTree.Element:
     try:
@@ -107,6 +141,15 @@ async def avatar_for_steamid64(steamid64: int) -> bytes:
     except ClientError:
         logger.exception("Couldn't get Steam profile")
         raise SteamError
+
+async def _name_for_steamid64(steamid64: int) -> str:
+    url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
+    xml = await _get_steam_profile(url)
+    steam_id = xml.find('steamID')
+    if steam_id is None or steam_id.text is None:
+        logger.error('Malformed Steam profile XML (no steamID)')
+        raise SteamXMLError
+    return steam_id.text
 
 async def _vnl_tiers() -> dict[str, tuple[int, int]]:
     url = 'https://vnl.kz/api/maps'
@@ -408,3 +451,68 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
     mode = _mode_for_record(record)
     api_map = await map_for_name(record.get('map_name', ''), mode)
     return _record_to_pb(record, api_map)
+
+async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
+    records = await _records_for_steamid64(steamid64, mode,
+                                           teleport_type=Type.TP)
+    records += await _records_for_steamid64(steamid64, mode,
+                                            teleport_type=Type.PRO)
+    if not records:
+        try:
+            player_name = await _name_for_steamid64(steamid64)
+        except SteamError:
+            player_name = None
+        return Profile(player_name=player_name, mode=mode, rank=Rank.NEW,
+                       points=0, average=0)
+
+    thresholds = [(1, Rank.BEGINNER_MINUS),
+                  (500, Rank.BEGINNER),
+                  (1000, Rank.BEGINNER_PLUS),
+                  (2000, Rank.AMATEUR_MINUS),
+                  (5000, Rank.AMATEUR),
+                  (10000, Rank.AMATEUR_PLUS),
+                  (20000, Rank.CASUAL_MINUS),
+                  (30000, Rank.CASUAL),
+                  (40000, Rank.CASUAL_PLUS),
+                  (60000, Rank.REGULAR_MINUS),
+                  (70000, Rank.REGULAR),
+                  (80000, Rank.REGULAR_PLUS),
+                  (100000, Rank.SKILLED_MINUS),
+                  (120000, Rank.SKILLED)]
+    if mode == Mode.VNL:
+        thresholds += [(140000, Rank.SKILLED_PLUS),
+                       (160000, Rank.EXPERT_MINUS),
+                       (180000, Rank.EXPERT),
+                       (200000, Rank.EXPERT_PLUS),
+                       (250000, Rank.SEMIPRO),
+                       (300000, Rank.PRO),
+                       (400000, Rank.MASTER),
+                       (600000, Rank.LEGEND)]
+    elif mode == Mode.SKZ:
+        thresholds += [(150000, Rank.SKILLED_PLUS),
+                       (200000, Rank.EXPERT_MINUS),
+                       (230000, Rank.EXPERT),
+                       (250000, Rank.EXPERT_PLUS),
+                       (300000, Rank.SEMIPRO),
+                       (400000, Rank.PRO),
+                       (500000, Rank.MASTER),
+                       (800000, Rank.LEGEND)]
+    else:
+        thresholds += [(150000, Rank.SKILLED_PLUS),
+                       (200000, Rank.EXPERT_MINUS),
+                       (230000, Rank.EXPERT),
+                       (250000, Rank.EXPERT_PLUS),
+                       (400000, Rank.SEMIPRO),
+                       (600000, Rank.PRO),
+                       (800000, Rank.MASTER),
+                       (1000000, Rank.LEGEND)]
+    thresholds.reverse()
+
+    points = sum(r['points'] for r in records)
+    average = points // len(records)
+    rank = Rank.NEW
+    for threshold, rank in thresholds:
+        if points > threshold:
+            break
+    return Profile(player_name=records[0].get('player_name'), mode=mode,
+                   rank=rank, points=points, average=average)
