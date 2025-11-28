@@ -14,7 +14,7 @@ async def _refresh() -> None:
     await init_db()
     await refresh_db_maps()
 
-def main(args) -> None:
+def main(args: list[str]) -> None:
     try:
         import uvloop
     except ImportError:
