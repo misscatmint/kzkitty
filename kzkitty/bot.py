@@ -102,12 +102,9 @@ async def _pb_component(ctx: GatewayContext, player: Player,
         profile_url = f'https://kzgo.eu/players/{player.steamid64}?{pb.mode}'
         map_url = f'https://kzgo.eu/maps/{pb.map.name}?{pb.mode}'
         tier = str(pb.map.tier)
-    body = f'## [{player_name}]({profile_url}) on [{pb.map.name}]({map_url})'
-    if pb.teleports == 0:
-        body += ' (PRO)'
-    body += f"""
+    body = f"""## [{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
 
-**Mode:** {pb.mode.upper()}
+**Mode:** {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
 **Tier:** {tier or '(unknown)'}
 **Time:** {_formattime(pb.time)}
 """
