@@ -86,8 +86,7 @@ def _formattime(td: timedelta) -> str:
     return s
 
 async def _pb_component(ctx: GatewayContext, player: Player,
-                        pb: PersonalBest, teleports: str | None=None
-                        ) -> ContainerComponentBuilder:
+                        pb: PersonalBest) -> ContainerComponentBuilder:
     player_name = pb.player_name or ctx.user.display_name
     if pb.mode == Mode.VNL:
         profile_url = f'https://vnl.kz/#/stats/{player.steamid64}'
@@ -106,8 +105,6 @@ async def _pb_component(ctx: GatewayContext, player: Player,
     body = f'# [{player_name}]({profile_url}) on [{pb.map.name}]({map_url})'
     if pb.teleports == 0:
         body += ' (PRO)'
-    elif teleports == 'tp':
-        body += ' (TP)'
     body += f"""
 
 **Mode:** {pb.mode.upper()}
@@ -192,7 +189,7 @@ async def slash_pb(ctx: GatewayContext,
 
     pbs.sort(key=lambda pb: pb.time)
     pb = pbs[0]
-    component = await _pb_component(ctx, player, pb, teleports)
+    component = await _pb_component(ctx, player, pb)
     await ctx.respond(component=component)
 
 @client.include
