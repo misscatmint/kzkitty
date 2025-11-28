@@ -91,12 +91,11 @@ async def _pb_component(ctx: GatewayContext, player: Player,
     if pb.mode == Mode.VNL:
         profile_url = f'https://vnl.kz/#/stats/{player.steamid64}'
         map_url = f'https://vnl.kz/#/map/{pb.map.name}'
-        tier = str(pb.map.vnl_pro_tier if pb.teleports == 0 else
-                   pb.map.vnl_tier)
+        tier = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
     else:
         profile_url = f'https://kzgo.eu/players/{player.steamid64}?{pb.mode}'
         map_url = f'https://kzgo.eu/maps/{pb.map.name}?{pb.mode}'
-        tier = str(pb.map.tier)
+        tier = pb.map.tier
     body = f"""## [{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
 
 **Mode:** {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
