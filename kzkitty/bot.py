@@ -174,8 +174,7 @@ async def slash_pb(ctx: GatewayContext,
     elif teleports == 'tp':
         pbs = [pb for pb in pbs if pb.teleports]
     if not pbs:
-        await ctx.respond("No PBs found!",
-                          flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('No PBs found!', flags=MessageFlag.EPHEMERAL)
         return
 
     pbs.sort(key=lambda pb: pb.time)
