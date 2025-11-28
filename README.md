@@ -4,12 +4,12 @@ Discord bot for the CS:GO KZ global API.
 
 Available commands:
 
-    `/pb` - show a personal best run for a given map/mode/player
-    `/latest` - show the most recent run
-    `/register` - register a steam profile url and default mode with the bot
-    `/mode` - change the default mode when using `/pb` and `/latest`
+- `/pb` - show a personal best run for a given map/mode/player
+- `/latest` - show the most recent run
+- `/register` - register a steam profile url and default mode with the bot
+- `/mode` - change the default mode when using `/pb` and `/latest`
 
-To set up a dev environment:
+To set up a dev environment (with `uv`):
 
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
