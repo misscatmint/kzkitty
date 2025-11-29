@@ -389,7 +389,10 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
     records.sort(key=sort_key, reverse=True)
     record = records[0]
     mode = _mode_for_record(record)
-    api_map = await map_for_name(record.get('map_name', ''), mode)
+    try:
+        api_map = await map_for_name(record.get('map_name', ''), mode)
+    except APIMapError as e:
+        raise APIError('Invalid map name from API PB') from e
     pb = _record_to_pb(record, api_map)
     try:
         pb.place = await _place_for_pb(pb)
