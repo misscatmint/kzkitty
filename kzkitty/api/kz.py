@@ -430,54 +430,53 @@ async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
         return Profile(player_name=player_name, mode=mode, rank=Rank.NEW,
                        points=0, average=0)
 
-    thresholds = [(1, Rank.BEGINNER_MINUS),
-                  (500, Rank.BEGINNER),
-                  (1000, Rank.BEGINNER_PLUS),
-                  (2000, Rank.AMATEUR_MINUS),
-                  (5000, Rank.AMATEUR),
-                  (10000, Rank.AMATEUR_PLUS),
-                  (20000, Rank.CASUAL_MINUS),
-                  (30000, Rank.CASUAL),
-                  (40000, Rank.CASUAL_PLUS),
-                  (60000, Rank.REGULAR_MINUS),
-                  (70000, Rank.REGULAR),
-                  (80000, Rank.REGULAR_PLUS),
-                  (100000, Rank.SKILLED_MINUS),
-                  (120000, Rank.SKILLED)]
     if mode == Mode.VNL:
-        thresholds += [(140000, Rank.SKILLED_PLUS),
-                       (160000, Rank.EXPERT_MINUS),
-                       (180000, Rank.EXPERT),
-                       (200000, Rank.EXPERT_PLUS),
-                       (250000, Rank.SEMIPRO),
-                       (300000, Rank.PRO),
-                       (400000, Rank.MASTER),
-                       (600000, Rank.LEGEND)]
+        thresholds = [(600000, Rank.LEGEND),
+                      (400000, Rank.MASTER),
+                      (300000, Rank.PRO),
+                      (250000, Rank.SEMIPRO),
+                      (200000, Rank.EXPERT_PLUS),
+                      (180000, Rank.EXPERT),
+                      (160000, Rank.EXPERT_MINUS),
+                      (140000, Rank.SKILLED_PLUS)]
     elif mode == Mode.SKZ:
-        thresholds += [(150000, Rank.SKILLED_PLUS),
-                       (200000, Rank.EXPERT_MINUS),
-                       (230000, Rank.EXPERT),
-                       (250000, Rank.EXPERT_PLUS),
-                       (300000, Rank.SEMIPRO),
-                       (400000, Rank.PRO),
-                       (500000, Rank.MASTER),
-                       (800000, Rank.LEGEND)]
+        thresholds = [(800000, Rank.LEGEND),
+                      (500000, Rank.MASTER),
+                      (400000, Rank.PRO),
+                      (300000, Rank.SEMIPRO),
+                      (250000, Rank.EXPERT_PLUS),
+                      (230000, Rank.EXPERT),
+                      (200000, Rank.EXPERT_MINUS),
+                      (150000, Rank.SKILLED_PLUS)]
     else:
-        thresholds += [(150000, Rank.SKILLED_PLUS),
-                       (200000, Rank.EXPERT_MINUS),
-                       (230000, Rank.EXPERT),
-                       (250000, Rank.EXPERT_PLUS),
-                       (400000, Rank.SEMIPRO),
-                       (600000, Rank.PRO),
-                       (800000, Rank.MASTER),
-                       (1000000, Rank.LEGEND)]
-    thresholds.reverse()
+        thresholds = [(1000000, Rank.LEGEND),
+                      (800000, Rank.MASTER),
+                      (600000, Rank.PRO),
+                      (400000, Rank.SEMIPRO),
+                      (250000, Rank.EXPERT_PLUS),
+                      (230000, Rank.EXPERT),
+                      (200000, Rank.EXPERT_MINUS),
+                      (150000, Rank.SKILLED_PLUS)]
+    thresholds += [(120000, Rank.SKILLED),
+                   (100000, Rank.SKILLED_MINUS),
+                   (80000, Rank.REGULAR_PLUS),
+                   (70000, Rank.REGULAR),
+                   (60000, Rank.REGULAR_MINUS),
+                   (40000, Rank.CASUAL_PLUS),
+                   (30000, Rank.CASUAL),
+                   (20000, Rank.CASUAL_MINUS),
+                   (10000, Rank.AMATEUR_PLUS),
+                   (5000, Rank.AMATEUR),
+                   (2000, Rank.AMATEUR_MINUS),
+                   (1000, Rank.BEGINNER_PLUS),
+                   (500, Rank.BEGINNER),
+                   (1, Rank.BEGINNER_MINUS)]
 
     points = sum(r['points'] for r in records)
     average = points // len(records)
     rank = Rank.NEW
     for threshold, rank in thresholds:
-        if points > threshold:
+        if points >= threshold:
             break
     return Profile(player_name=records[0].get('player_name'), mode=mode,
                    rank=rank, points=points, average=average)
