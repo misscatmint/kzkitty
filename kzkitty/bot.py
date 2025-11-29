@@ -9,10 +9,10 @@ from tortoise.exceptions import DoesNotExist
 from kzkitty.api.kz import (APIError, APIMapError, APIMapAmbiguousError,
                             latest_pb_for_steamid64,
                             map_for_name, pb_for_steamid64,
-                            profile_for_steamid64)
+                            profile_for_steamid64, wrs_for_map)
 from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
-from kzkitty.components import pb_component, profile_component
+from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.gateway import GatewayBot
 from kzkitty.models import Mode, Player, Type
 
@@ -146,4 +146,20 @@ async def slash_profile(ctx: GatewayContext,
     mode = player.mode if mode_name is None else Mode(mode_name)
     profile = await profile_for_steamid64(player.steamid64, mode)
     component = await profile_component(ctx, player, profile)
+    await ctx.respond(component=component)
+
+@client.include
+@slash_command('map', 'Show map info and world record times')
+async def slash_map(ctx: GatewayContext,
+                    map_name: Option[str, StrParams('Map name', name='map')],
+                    mode_name: Option[str | None, ModeParams]=None) -> None:
+    try:
+        player = await _get_player(ctx)
+    except PlayerNotFound:
+        mode = Mode.KZT
+    else:
+        mode = player.mode if mode_name is None else Mode(mode_name)
+    api_map = await map_for_name(map_name, mode)
+    wrs = await wrs_for_map(api_map, mode)
+    component = await map_component(ctx, api_map, mode, wrs)
     await ctx.respond(component=component)

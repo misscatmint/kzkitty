@@ -6,7 +6,7 @@ from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
-from kzkitty.api.kz import PersonalBest, Profile, Rank
+from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, avatar_for_steamid64
 from kzkitty.models import Mode, Player
 
@@ -132,3 +132,53 @@ async def profile_component(ctx: GatewayContext, player: Player,
 **Average**: {profile.average}
 """
     return await _player_container(player, accent_color, body)
+
+async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
+                        wrs: list[PersonalBest]) -> ContainerComponentBuilder:
+    if mode == Mode.VNL:
+        map_url = f'https://vnl.kz/#/map/{api_map.name}'
+        if api_map.vnl_tier is None or api_map.vnl_pro_tier is None:
+            tier = '(unknown)'
+        else:
+            tier_names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium',
+                          4: 'Advanced', 5: 'Hard', 6: 'Very Hard',
+                          7: 'Extreme', 8: 'Death', 9: 'Unfeasible'}
+            tier_name = tier_names.get(api_map.vnl_tier, 'Unknown')
+            pro_tier_name = tier_names.get(api_map.vnl_pro_tier, 'Unknown')
+            tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
+**Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
+        color = {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
+                 5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
+                 9: 0x000000}.get(api_map.vnl_tier or 0, 0xcccccc)
+    else:
+        map_url = f'https://kzgo.eu/maps/{api_map.name}?{mode}'
+        tier_name = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard',
+                     5: 'Very Hard', 6: 'Extreme',
+                     7: 'Death'}.get(api_map.tier, 'Unknown')
+        tier = f'**Tier**: {api_map.tier} - {tier_name}'
+        color = {1: 0x049c49, 2: 0x007053, 3: 0xf39c12, 4: 0xfd7e14,
+                 5: 0xe74c3c, 6: 0xc52412, 7: 0xd22ce5}.get(api_map.tier,
+                                                            0xcccccc)
+
+    tp_pb = pro_pb = None
+    for pb in wrs:
+        if pb.teleports == 0:
+            pro_pb = pb
+        else:
+            tp_pb = pb
+
+    body = f"""## [{api_map.name}]({map_url})
+
+**Mode**: {mode.upper()}
+{tier}
+**TP**: {_formattime(tp_pb.time) if tp_pb is not None else '(none)'}
+**PRO**: {_formattime(pro_pb.time) if pro_pb is not None else '(none)'}
+"""
+    accent_color = Color(color)
+    container = ContainerComponentBuilder(accent_color=accent_color)
+    container.add_text_display(body)
+    if api_map.thumbnail is not None:
+        gallery = MediaGalleryComponentBuilder()
+        gallery.add_media_gallery_item(api_map.thumbnail)
+        container.add_component(gallery)
+    return container

@@ -404,6 +404,37 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
         pass
     return pb
 
+async def _record_for_map(api_map: APIMap, mode: Mode, teleport_type: Type
+                          ) -> dict | None:
+    api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
+                Mode.VNL: 'kz_vanilla'}[mode]
+    url = ('https://kztimerglobal.com/api/v2.0/records/top'
+           f'?map_name={api_map.name}&stage=0&'
+           f'modes_list_string={api_mode}&limit=1')
+    if teleport_type == Type.TP:
+        url += '&has_teleports=true'
+    elif teleport_type == Type.PRO:
+        url += '&has_teleports=false'
+    try:
+        async with ClientSession() as session:
+            async with session.get(url) as r:
+                if r.status != 200:
+                    raise APIError("Couldn't get global API WR "
+                                   '(HTTP %d)' % r.status)
+                records = await r.json()
+    except ClientError as e:
+        raise APIError("Couldn't get global API WR") from e
+    if not isinstance(records, list):
+        raise APIError('Malformed global API WR (not a list)')
+    if records and not isinstance(records[0], dict):
+        raise APIError('Malformed global API WR (not a list of dicts)')
+    return records[0] if records else None
+
+async def wrs_for_map(api_map: APIMap, mode: Mode) -> list[PersonalBest]:
+    records = [await _record_for_map(api_map, mode, teleport_type)
+               for teleport_type in (Type.TP, Type.PRO)]
+    return [_record_to_pb(record, api_map) for record in records if record]
+
 async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
     records = await _records_for_steamid64(steamid64, mode,
                                            teleport_type=Type.TP)
