@@ -6,8 +6,8 @@ from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
-from kzkitty.api import (PersonalBest, Profile, Rank, SteamError,
-                         avatar_for_steamid64)
+from kzkitty.api.kz import PersonalBest, Profile, Rank
+from kzkitty.api.steam import SteamError, avatar_for_steamid64
 from kzkitty.models import Mode, Player
 
 async def _container_component(player: Player, accent_color: Color, body: str):

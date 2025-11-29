@@ -5,7 +5,7 @@ import os
 import hikari
 from aiocron import crontab
 
-from kzkitty.api import APIError, refresh_db_maps
+from kzkitty.api.kz import APIError, refresh_db_maps
 from kzkitty.models import Mode, Player, close_db, init_db
 
 logger = logging.getLogger('kzkitty.gateway')
