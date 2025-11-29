@@ -113,7 +113,9 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
-                if r.status != 200:
+                if r.status == 404:
+                    raise APIMapError
+                elif r.status != 200:
                     raise APIError("Couldn't get vnl.kz map tiers (HTTP %d)" %
                                    r.status)
                 json = await r.json()
@@ -258,6 +260,8 @@ async def map_for_name(name: str, mode: Mode) -> APIMap:
     if mode == Mode.VNL and (vnl_tier is None or vnl_pro_tier is None):
         try:
             vnl_tier, vnl_pro_tier = await _vnl_tiers_for_map(name)
+        except APIMapError:
+            vnl_tier = vnl_pro_tier = None
         except APIError:
             logger.exception("Couldn't get vnl.kz map tiers")
             vnl_tier = vnl_pro_tier = None
