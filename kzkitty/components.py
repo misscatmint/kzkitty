@@ -63,6 +63,10 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
         top_100 = False
     if medal is not None:
         body = f'## {medal} '
+    elif pb.points >= 900:
+        body = '## :fire: '
+    elif pb.points >= 800:
+        body = '## :sparkles: '
     else:
         body = '## '
     body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
