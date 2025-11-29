@@ -57,12 +57,14 @@ class APIMap:
 
 @dataclass
 class PersonalBest:
+    id: int
     player_name: str | None
     map: APIMap
     mode: Mode
     time: timedelta
     teleports: int
     points: int
+    place: int | None
     date: datetime
 
 @dataclass
@@ -322,11 +324,13 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
         logger.error('Malformed global API PB (bad player_name)')
         raise APIError
     mode = _mode_for_record(record)
+    record_id = record.get('id')
     time = record.get('time')
     teleports = record.get('teleports')
     points = record.get('points')
     created_on = record.get('created_on')
-    if (not isinstance(time, float) or
+    if (not isinstance(record_id, int) or
+        not isinstance(time, float) or
         not isinstance(teleports, int) or
         not isinstance(points, int) or
         not isinstance(created_on, str)):
@@ -339,14 +343,48 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
         raise APIError
     date = date.replace(tzinfo=timezone.utc)
 
-    return PersonalBest(player_name=player_name, map=api_map,
+    return PersonalBest(id=record_id, player_name=player_name, map=api_map,
                         time=timedelta(seconds=time), mode=mode,
-                        teleports=teleports, points=points, date=date)
+                        teleports=teleports, points=points, place=None,
+                        date=date)
 
-async def pbs_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode
-                            ) -> list[PersonalBest]:
+async def _place_for_pb(pb: PersonalBest) -> int:
+    url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
+    try:
+        async with ClientSession() as session:
+            async with session.get(url) as r:
+                if r.status != 200:
+                    logger.error("Couldn't get global API PB place (HTTP %d)",
+                                 r.status)
+                    raise APIError
+                place = await r.json()
+    except ClientError:
+        logger.exception("Couldn't get global API PB place")
+        raise APIError
+    if not isinstance(place, int):
+        logger.error('Malformed global API PB place (not an int)')
+        raise APIError
+    return place
+
+async def pb_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode,
+                           teleport_type: Type=Type.ANY,
+                           ) -> PersonalBest | None:
     records = await _records_for_steamid64(steamid64, mode, api_map=api_map)
-    return [_record_to_pb(record, api_map) for record in records]
+    pbs = [_record_to_pb(record, api_map) for record in records]
+    if not pbs:
+        return None
+
+    if teleport_type == Type.PRO:
+        pbs = [pb for pb in pbs if pb.teleports == 0]
+    elif teleport_type == Type.TP:
+        pbs = [pb for pb in pbs if pb.teleports]
+    pbs.sort(key=lambda pb: pb.time)
+    pb = pbs[0]
+    try:
+        pb.place = await _place_for_pb(pb)
+    except APIError:
+        pass
+    return pbs[0]
 
 async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
                                   teleport_type: Type=Type.ANY,
@@ -372,7 +410,12 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
     record = records[0]
     mode = _mode_for_record(record)
     api_map = await map_for_name(record.get('map_name', ''), mode)
-    return _record_to_pb(record, api_map)
+    pb = _record_to_pb(record, api_map)
+    try:
+        pb.place = await _place_for_pb(pb)
+    except APIError:
+        pass
+    return pb
 
 async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
     records = await _records_for_steamid64(steamid64, mode,
