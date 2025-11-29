@@ -10,7 +10,7 @@ from kzkitty.api.kz import PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, avatar_for_steamid64
 from kzkitty.models import Mode, Player
 
-async def _container_component(player: Player, accent_color: Color, body: str):
+async def _player_container(player: Player, accent_color: Color, body: str):
     container = ContainerComponentBuilder(accent_color=accent_color)
     try:
         avatar = await avatar_for_steamid64(player.steamid64)
@@ -85,18 +85,7 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
         accent_color = Color(0x1e90ff)
     else:
         accent_color = Color(0xffa500)
-    container = ContainerComponentBuilder(accent_color=accent_color)
-    try:
-        avatar = await avatar_for_steamid64(player.steamid64)
-    except SteamError:
-        avatar = None
-    if avatar is not None:
-        thumbnail = ThumbnailComponentBuilder(media=avatar)
-        section = SectionComponentBuilder(accessory=thumbnail)
-        section.add_text_display(body)
-        container.add_component(section)
-    else:
-        container.add_text_display(body)
+    container = await _player_container(player, accent_color, body)
     if pb.map.thumbnail is not None:
         gallery = MediaGalleryComponentBuilder()
         gallery.add_media_gallery_item(pb.map.thumbnail)
@@ -142,4 +131,4 @@ async def profile_component(ctx: GatewayContext, player: Player,
 **Points:** {profile.points:,}
 **Average:** {profile.average}
 """
-    return await _container_component(player, accent_color, body)
+    return await _player_container(player, accent_color, body)
