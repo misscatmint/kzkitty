@@ -45,6 +45,7 @@ To deploy with Docker Compose, use a `docker-compose.yaml` file:
 services:
   kzkitty:
     container_name: kzkitty
+    restart: unless-stopped
     user: "1000:1000"
     build:
       context: ~/src/kzkitty
