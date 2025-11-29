@@ -8,7 +8,7 @@ from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz import (APIError, APIMapError, APIMapAmbiguousError,
                             latest_pb_for_steamid64,
-                            map_for_name, pbs_for_steamid64,
+                            map_for_name, pb_for_steamid64,
                             profile_for_steamid64)
 from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
@@ -85,7 +85,8 @@ async def slash_pb(ctx: GatewayContext,
 
     try:
         api_map = await map_for_name(map_name, mode)
-        pbs = await pbs_for_steamid64(player.steamid64, api_map, mode)
+        pb = await pb_for_steamid64(player.steamid64, api_map, mode,
+                                    Type(type_name))
     except APIMapAmbiguousError as e:
         if len(e.db_maps) > 10:
             await ctx.respond('More than 10 maps found!',
@@ -103,17 +104,10 @@ async def slash_pb(ctx: GatewayContext,
                           flags=MessageFlag.EPHEMERAL)
         return
 
-    teleport_type = Type(type_name)
-    if teleport_type == Type.PRO:
-        pbs = [pb for pb in pbs if pb.teleports == 0]
-    elif teleport_type == Type.TP:
-        pbs = [pb for pb in pbs if pb.teleports]
-    if not pbs:
-        await ctx.respond('No PBs found!', flags=MessageFlag.EPHEMERAL)
+    if not pb:
+        await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return
 
-    pbs.sort(key=lambda pb: pb.time)
-    pb = pbs[0]
     component = await pb_component(ctx, player, pb)
     await ctx.respond(component=component)
 
