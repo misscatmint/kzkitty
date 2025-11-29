@@ -25,6 +25,16 @@ PlayerParams = MemberParams('Player', name='player')
 TypeParams = StrParams('Pro or teleport run', name='type',
                        choices=[Type.PRO, Type.TP, Type.ANY])
 
+@client.set_error_handler
+async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
+    if isinstance(exc, SteamError):
+        await ctx.respond("Couldn't access Steam API!",
+                          flags=MessageFlag.EPHEMERAL)
+    elif isinstance(exc, APIError):
+        await ctx.respond("Couldn't access global API!",
+                          flags=MessageFlag.EPHEMERAL)
+    raise exc
+
 @client.include
 @slash_command('register', 'Register account')
 async def slash_register(ctx: GatewayContext,
@@ -35,9 +45,6 @@ async def slash_register(ctx: GatewayContext,
         steamid64 = await steamid64_for_profile(profile)
     except SteamValueError:
         await ctx.respond('Invalid Steam profile URL!',
-                          flags=MessageFlag.EPHEMERAL)
-    except SteamError:
-        await ctx.respond("Couldn't access Steam API!",
                           flags=MessageFlag.EPHEMERAL)
     else:
         defaults: dict[str, Any] = {'steamid64': steamid64}
@@ -99,10 +106,6 @@ async def slash_pb(ctx: GatewayContext,
     except APIMapError:
         await ctx.respond('Map not found!', flags=MessageFlag.EPHEMERAL)
         return
-    except APIError:
-        await ctx.respond("Couldn't access global API!",
-                          flags=MessageFlag.EPHEMERAL)
-        return
 
     if not pb:
         await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
@@ -128,13 +131,8 @@ async def slash_latest(ctx: GatewayContext,
     else:
         mode = Mode(mode_name)
 
-    try:
-        pb = await latest_pb_for_steamid64(player.steamid64, mode,
-                                           Type(type_name))
-    except APIError:
-        await ctx.respond("Couldn't access global API!",
-                          flags=MessageFlag.EPHEMERAL)
-        return
+    pb = await latest_pb_for_steamid64(player.steamid64, mode,
+                                       Type(type_name))
     if not pb:
         await ctx.respond("No PB found!",
                           flags=MessageFlag.EPHEMERAL)
@@ -159,12 +157,6 @@ async def slash_profile(ctx: GatewayContext,
     else:
         mode = Mode(mode_name)
 
-    try:
-        profile = await profile_for_steamid64(player.steamid64, mode)
-    except APIError:
-        await ctx.respond("Couldn't access global API!",
-                          flags=MessageFlag.EPHEMERAL)
-        return
-
+    profile = await profile_for_steamid64(player.steamid64, mode)
     component = await profile_component(ctx, player, profile)
     await ctx.respond(component=component)

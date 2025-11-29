@@ -114,25 +114,19 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get vnl.kz map tiers (HTTP %d)",
-                                 r.status)
-                    return None, None
+                    raise APIError("Couldn't get vnl.kz map tiers (HTTP %d)" %
+                                   r.status)
                 json = await r.json()
-    except ClientError:
-        logger.exception("Couldn't get vnl.kz map tiers")
-        return None, None
+    except ClientError as e:
+        raise APIError("Couldn't get vnl.kz map tiers") from e
 
     if not isinstance(json, dict):
-        logger.error("Malformed vnl.kz JSON (not a dict)")
-        return None, None
+        raise APIError("Malformed vnl.kz JSON (not a dict)")
     tp_tier = json.get('tpTier')
-    if not isinstance(tp_tier, int):
-        logger.error("Malformed vnl.kz JSON (tpTier not an int)")
-        tp_tier = None
     pro_tier = json.get('proTier')
-    if not isinstance(pro_tier, int):
-        logger.error("Malformed vnl.kz JSON (proTier not an int)")
-        pro_tier = None
+    if (not isinstance(tp_tier, int) or
+        not isinstance(pro_tier, int)):
+        raise APIError("Malformed vnl.kz JSON (tpTier/proTier not an int)")
     return tp_tier, pro_tier
 
 async def _thumbnail_for_map(name: str) -> bytes | None:
@@ -159,17 +153,14 @@ async def refresh_db_maps() -> tuple[int, int]:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get global API maps (HTTP %d)",
-                                 r.status)
-                    raise APIError
+                    raise APIError("Couldn't get global API maps (HTTP %d)" %
+                                   r.status)
                 json = await r.json()
-    except ClientError:
-        logger.exception("Couldn't get global API maps")
-        raise APIError
+    except ClientError as e:
+        raise APIError("Couldn't get global API maps") from e
 
     if not isinstance(json, list):
-        logger.error('Malformed global API maps response (not a list)')
-        raise APIError
+        raise APIError('Malformed global API maps response (not a list)')
 
     logger.info('Downloading VNL map tiers')
     vnl_tiers = await _vnl_tiers()
@@ -249,27 +240,27 @@ async def map_for_name(name: str, mode: Mode) -> APIMap:
             async with ClientSession() as session:
                 async with session.get(url) as r:
                     if r.status != 200:
-                        logger.error("Couldn't get global API map (HTTP %d)",
-                                     r.status)
-                        raise APIError
+                        raise APIError("Couldn't get global API map "
+                                       '(HTTP %d)' % r.status)
                     json = await r.json()
-        except ClientError:
-            logger.exception("Couldn't get global API map")
-            raise APIError
+        except ClientError as e:
+            raise APIError("Couldn't get global API map") from e
 
         if json is None:
             raise APIMapError
         elif not isinstance(json, dict):
-            logger.error('Malformed global API map response (not a dict)')
-            raise APIError
+            raise APIError('Malformed global API map response (not a dict)')
         tier = json.get('difficulty')
         if not isinstance(tier, int):
-            logger.error('Malformed global API map response (tier not an int)')
-            raise APIError
+            raise APIError('Malformed global API map response (tier not an int)')
         vnl_tier = vnl_pro_tier = thumbnail = None
 
     if mode == Mode.VNL and (vnl_tier is None or vnl_pro_tier is None):
-        vnl_tier, vnl_pro_tier = await _vnl_tiers_for_map(name)
+        try:
+            vnl_tier, vnl_pro_tier = await _vnl_tiers_for_map(name)
+        except APIError:
+            logger.exception("Couldn't get vnl.kz map tiers")
+            vnl_tier = vnl_pro_tier = None
 
     if thumbnail is None:
         thumbnail = await _thumbnail_for_map(name)
@@ -281,8 +272,7 @@ def _mode_for_record(record: dict) -> Mode:
     mode = {'kz_timer': Mode.KZT, 'kz_simple': Mode.SKZ,
             'kz_vanilla': Mode.VNL}.get(record.get('mode', ''))
     if mode is None:
-        logger.error('Malformed global API PB (bad mode)')
-        raise APIError
+        raise APIError('Malformed global API PB (bad mode)')
     return mode
 
 async def _records_for_steamid64(steamid64: int, mode: Mode,
@@ -303,26 +293,21 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get global API PBs (HTTP %d)",
-                                 r.status)
-                    raise APIError
+                    raise APIError("Couldn't get global API PBs (HTTP %d)" %
+                                   r.status)
                 records = await r.json()
-    except ClientError:
-        logger.exception("Couldn't get global API PBs")
-        raise APIError
+    except ClientError as e:
+        raise APIError("Couldn't get global API PBs") from e
     if not isinstance(records, list):
-        logger.error('Malformed global API PBs (not a list)')
-        raise APIError
+        raise APIError('Malformed global API PBs (not a list)')
     if records and not isinstance(records[0], dict):
-        logger.error('Malformed global API PBs (not a list of dicts)')
-        raise APIError
+        raise APIError('Malformed global API PBs (not a list of dicts)')
     return records
 
 def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
     player_name = record.get('player_name')
     if not isinstance(player_name, str) and player_name is not None:
-        logger.error('Malformed global API PB (bad player_name)')
-        raise APIError
+        raise APIError('Malformed global API PB (bad player_name)')
     mode = _mode_for_record(record)
     record_id = record.get('id')
     time = record.get('time')
@@ -334,13 +319,11 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
         not isinstance(teleports, int) or
         not isinstance(points, int) or
         not isinstance(created_on, str)):
-        logger.error('Malformed global API PB')
-        raise APIError
+        raise APIError('Malformed global API PB')
     try:
         date = datetime.fromisoformat(created_on)
-    except ValueError:
-        logger.exception('Malformed global API PB (bad date)')
-        raise APIError
+    except ValueError as e:
+        raise APIError('Malformed global API PB (bad date)') from e
     date = date.replace(tzinfo=timezone.utc)
 
     return PersonalBest(id=record_id, player_name=player_name, map=api_map,
@@ -354,16 +337,13 @@ async def _place_for_pb(pb: PersonalBest) -> int:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get global API PB place (HTTP %d)",
-                                 r.status)
-                    raise APIError
+                    raise APIError("Couldn't get global API PB place "
+                                   '(HTTP %d)' % r.status)
                 place = await r.json()
-    except ClientError:
-        logger.exception("Couldn't get global API PB place")
-        raise APIError
+    except ClientError as e:
+        raise APIError("Couldn't get global API PB place") from e
     if not isinstance(place, int):
-        logger.error('Malformed global API PB place (not an int)')
-        raise APIError
+        raise APIError('Malformed global API PB place (not an int)')
     return place
 
 async def pb_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode,
@@ -383,7 +363,7 @@ async def pb_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode,
     try:
         pb.place = await _place_for_pb(pb)
     except APIError:
-        pass
+        logger.exception("Couldn't get global API PB place")
     return pbs[0]
 
 async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
