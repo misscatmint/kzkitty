@@ -71,14 +71,14 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
         body = '## '
     body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
 
-**Mode:** {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
-**Tier:** {tier or '(unknown)'}
-**Time:** {_formattime(pb.time)}{f' (#{pb.place})' if top_100 else ''}
+**Mode**: {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
+**Tier**: {tier or '(unknown)'}
+**Time**: {_formattime(pb.time)}{f' (#{pb.place})' if top_100 else ''}
 """
     if pb.teleports:
-        body += f"""**Teleports:** {pb.teleports}
+        body += f"""**Teleports**: {pb.teleports}
 """
-    body += f"""**Points:** {pb.points}
+    body += f"""**Points**: {pb.points}
 """
 
     if pb.teleports == 0:
@@ -126,9 +126,9 @@ async def profile_component(ctx: GatewayContext, player: Player,
     accent_color = Color(colors.get(profile.rank, 0xcccccc))
     body = f"""## [{player_name}]({profile_url})
 
-**Mode:** {profile.mode.upper()}
-**Rank:** {profile.rank}
-**Points:** {profile.points:,}
-**Average:** {profile.average}
+**Mode**: {profile.mode.upper()}
+**Rank**: {profile.rank}
+**Points**: {profile.points:,}
+**Average**: {profile.average}
 """
     return await _player_container(player, accent_color, body)
