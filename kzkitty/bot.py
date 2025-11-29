@@ -6,11 +6,12 @@ from arc import (GatewayClient, GatewayContext, MemberParams, Option,
 from hikari import Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
-from kzkitty.api import (APIError, APIMapError, APIMapAmbiguousError,
-                         SteamError, SteamValueError,
-                         latest_pb_for_steamid64,
-                         map_for_name, pbs_for_steamid64,
-                         profile_for_steamid64, steamid64_for_profile)
+from kzkitty.api.kz import (APIError, APIMapError, APIMapAmbiguousError,
+                            latest_pb_for_steamid64,
+                            map_for_name, pbs_for_steamid64,
+                            profile_for_steamid64)
+from kzkitty.api.steam import (SteamError, SteamValueError,
+                               steamid64_for_profile)
 from kzkitty.components import pb_component, profile_component
 from kzkitty.gateway import GatewayBot
 from kzkitty.models import Mode, Player, Type

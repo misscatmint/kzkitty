@@ -4,7 +4,7 @@ import sys
 
 from tortoise import run_async
 
-from kzkitty.api import refresh_db_maps
+from kzkitty.api.kz import refresh_db_maps
 from kzkitty.bot import bot
 from kzkitty.models import init_db
 
