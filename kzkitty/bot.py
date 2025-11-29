@@ -128,7 +128,13 @@ async def slash_latest(ctx: GatewayContext,
     else:
         mode = Mode(mode_name)
 
-    pb = await latest_pb_for_steamid64(player.steamid64, mode, Type(type_name))
+    try:
+        pb = await latest_pb_for_steamid64(player.steamid64, mode,
+                                           Type(type_name))
+    except APIError:
+        await ctx.respond("Couldn't access global API!",
+                          flags=MessageFlag.EPHEMERAL)
+        return
     if not pb:
         await ctx.respond("No PB found!",
                           flags=MessageFlag.EPHEMERAL)
@@ -153,6 +159,12 @@ async def slash_profile(ctx: GatewayContext,
     else:
         mode = Mode(mode_name)
 
-    profile = await profile_for_steamid64(player.steamid64, mode)
+    try:
+        profile = await profile_for_steamid64(player.steamid64, mode)
+    except APIError:
+        await ctx.respond("Couldn't access global API!",
+                          flags=MessageFlag.EPHEMERAL)
+        return
+
     component = await profile_component(ctx, player, profile)
     await ctx.respond(component=component)
