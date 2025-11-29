@@ -7,6 +7,7 @@ Available commands:
 - `/pb` - show a personal best run for a given map/mode/player
 - `/latest` - show the most recent run
 - `/profile` - show current rank, points, point average
+- `/map` - show map info and world record times
 - `/register` - register a steam profile url and default mode with the bot
 - `/mode` - change the default mode when using `/pb` and `/latest`
 
