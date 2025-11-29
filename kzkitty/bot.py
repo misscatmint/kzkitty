@@ -25,9 +25,34 @@ PlayerParams = MemberParams('Player', name='player')
 TypeParams = StrParams('Pro or teleport run', name='type',
                        choices=[Type.PRO, Type.TP, Type.ANY])
 
+class PlayerNotFound(Exception):
+    pass
+
+async def _get_player(ctx: GatewayContext, player_member: Member | None=None
+                      ) -> Player:
+    try:
+        return await Player.get(id=(player_member or ctx.user).id)
+    except DoesNotExist:
+        raise PlayerNotFound
+
 @client.set_error_handler
 async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
-    if isinstance(exc, SteamError):
+    if isinstance(exc, PlayerNotFound):
+        await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
+        return
+    elif isinstance(exc, APIMapAmbiguousError):
+        if len(exc.db_maps) > 10:
+            await ctx.respond('More than 10 maps found!',
+                              flags=MessageFlag.EPHEMERAL)
+        else:
+            map_names = sorted(m.name for m in exc.db_maps)
+            await ctx.respond(f"Multiple maps found: {', '.join(map_names)}",
+                              flags=MessageFlag.EPHEMERAL)
+        return
+    elif isinstance(exc, APIMapError):
+        await ctx.respond('Map not found!', flags=MessageFlag.EPHEMERAL)
+        return
+    elif isinstance(exc, SteamError):
         await ctx.respond("Couldn't access Steam API!",
                           flags=MessageFlag.EPHEMERAL)
     elif isinstance(exc, APIError):
@@ -58,13 +83,9 @@ async def slash_register(ctx: GatewayContext,
 async def slash_mode(ctx: GatewayContext,
                      mode_name: Option[str | None, ModeParams]=None) -> None:
     if mode_name is None:
-        try:
-            player = await Player.get(id=ctx.user.id)
-        except DoesNotExist:
-            await ctx.respond('No mode set!', flags=MessageFlag.EPHEMERAL)
-        else:
-            await ctx.respond(f'Mode set to {player.mode}.',
-                              flags=MessageFlag.EPHEMERAL)
+        player = await _get_player(ctx)
+        await ctx.respond(f'Mode set to {player.mode}.',
+                          flags=MessageFlag.EPHEMERAL)
         return
 
     defaults = {'mode': mode_name}
@@ -80,33 +101,11 @@ async def slash_pb(ctx: GatewayContext,
                    mode_name: Option[str | None, ModeParams]=None,
                    player_member: Option[Member | None, PlayerParams]=None
                    ) -> None:
-    try:
-        player = await Player.get(id=(player_member or ctx.user).id)
-    except DoesNotExist:
-        await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
-        return
-    if mode_name is None:
-        mode = player.mode
-    else:
-        mode = Mode(mode_name)
-
-    try:
-        api_map = await map_for_name(map_name, mode)
-        pb = await pb_for_steamid64(player.steamid64, api_map, mode,
+    player = await _get_player(ctx, player_member)
+    mode = player.mode if mode_name is None else Mode(mode_name)
+    api_map = await map_for_name(map_name, mode)
+    pb = await pb_for_steamid64(player.steamid64, api_map, mode,
                                     Type(type_name))
-    except APIMapAmbiguousError as e:
-        if len(e.db_maps) > 10:
-            await ctx.respond('More than 10 maps found!',
-                              flags=MessageFlag.EPHEMERAL)
-        else:
-            map_names = sorted(m.name for m in e.db_maps)
-            await ctx.respond(f"Multiple maps found: {', '.join(map_names)}",
-                              flags=MessageFlag.EPHEMERAL)
-        return
-    except APIMapError:
-        await ctx.respond('Map not found!', flags=MessageFlag.EPHEMERAL)
-        return
-
     if not pb:
         await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return
@@ -126,16 +125,12 @@ async def slash_latest(ctx: GatewayContext,
     except DoesNotExist:
         await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
         return
-    if mode_name is None:
-        mode = player.mode
-    else:
-        mode = Mode(mode_name)
-
+    player = await _get_player(ctx, player_member)
+    mode = player.mode if mode_name is None else Mode(mode_name)
     pb = await latest_pb_for_steamid64(player.steamid64, mode,
                                        Type(type_name))
     if not pb:
-        await ctx.respond("No PB found!",
-                          flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return
 
     component = await pb_component(ctx, player, pb)
@@ -147,16 +142,8 @@ async def slash_profile(ctx: GatewayContext,
                         mode_name: Option[str | None, ModeParams]=None,
                         player_member: Option[Member | None, PlayerParams]=None
                         ) -> None:
-    try:
-        player = await Player.get(id=(player_member or ctx.user).id)
-    except DoesNotExist:
-        await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
-        return
-    if mode_name is None:
-        mode = player.mode
-    else:
-        mode = Mode(mode_name)
-
+    player = await _get_player(ctx, player_member)
+    mode = player.mode if mode_name is None else Mode(mode_name)
     profile = await profile_for_steamid64(player.steamid64, mode)
     component = await profile_component(ctx, player, profile)
     await ctx.respond(component=component)
