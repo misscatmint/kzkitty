@@ -114,7 +114,7 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status == 404:
-                    raise APIMapError
+                    raise APIMapError('Map not found on vnl.kz')
                 elif r.status != 200:
                     raise APIError("Couldn't get vnl.kz map tiers (HTTP %d)" %
                                    r.status)
@@ -217,7 +217,7 @@ async def refresh_db_maps() -> tuple[int, int]:
 
 async def map_for_name(name: str, mode: Mode) -> APIMap:
     if not re.fullmatch('[A-za-z0-9_]+', name):
-        raise APIMapError
+        raise APIMapError('Invalid map name')
 
     db_map = None
     try:
@@ -249,7 +249,7 @@ async def map_for_name(name: str, mode: Mode) -> APIMap:
             raise APIError("Couldn't get global API map") from e
 
         if json is None:
-            raise APIMapError
+            raise APIMapError('Map not found')
         elif not isinstance(json, dict):
             raise APIError('Malformed global API map response (not a dict)')
         tier = json.get('difficulty')
