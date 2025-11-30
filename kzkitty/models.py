@@ -4,14 +4,14 @@ from enum import StrEnum
 from tortoise import Model, Tortoise, fields
 
 class Type(StrEnum):
-    TP = 'tp'
-    PRO = 'pro'
+    TP = 'TP'
+    PRO = 'PRO'
     ANY = 'any'
 
 class Mode(StrEnum):
-    KZT = 'kzt'
-    SKZ = 'skz'
-    VNL = 'vnl'
+    KZT = 'KZT'
+    SKZ = 'SKZ'
+    VNL = 'VNL'
 
 class Map(Model):
     name = fields.CharField(max_length=255, primary_key=True)
