@@ -58,6 +58,7 @@ class APIMap:
 @dataclass
 class PersonalBest:
     id: int
+    steamid64: int
     player_name: str | None
     map: APIMap
     mode: Mode
@@ -314,6 +315,13 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
     return records
 
 def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
+    steamid64_str = record.get('steamid64')
+    if steamid64_str is None:
+        raise APIError('Malformed global API PB (missing steamid64)')
+    try:
+        steamid64 = int(steamid64_str)
+    except ValueError as e:
+        raise APIError('Malformed global API PB (bad steamid64)') from e
     player_name = record.get('player_name')
     if not isinstance(player_name, str) and player_name is not None:
         raise APIError('Malformed global API PB (bad player_name)')
@@ -335,7 +343,8 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
         raise APIError('Malformed global API PB (bad date)') from e
     date = date.replace(tzinfo=timezone.utc)
 
-    return PersonalBest(id=record_id, player_name=player_name, map=api_map,
+    return PersonalBest(id=record_id, steamid64=steamid64,
+                        player_name=player_name, map=api_map,
                         time=timedelta(seconds=time), mode=mode,
                         teleports=teleports, points=points, place=None,
                         date=date)
