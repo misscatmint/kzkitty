@@ -157,7 +157,7 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
             if api_map.vnl_tier != api_map.vnl_pro_tier:
                 pro_tier_name = _tier_name(api_map.vnl_pro_tier, mode)
                 tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
-    **Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
+**Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
             else:
                 tier = f'**Tier**: {api_map.vnl_tier} - {tier_name}'
         else:
