@@ -88,7 +88,9 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
         medal = None
         top_100 = False
 
-    if pb.points >= 900:
+    if pb.points == 1000:
+        points = f'{pb.points} :trophy:'
+    elif pb.points >= 900:
         points = f'{pb.points} :fire:'
         if medal is None:
             medal = ':fire:'
