@@ -27,9 +27,9 @@ async def _player_container(player: Player, accent_color: Color, body: str):
 
 def _tier_name(tier: int, mode: Mode) -> str:
     if mode == Mode.VNL:
-        names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium',
-                 4: 'Advanced', 5: 'Hard', 6: 'Very Hard',
-                 7: 'Extreme', 8: 'Death', 9: 'Unfeasible'}
+        names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Advanced',
+                 5: 'Hard', 6: 'Very Hard', 7: 'Extreme', 8: 'Death',
+                 9: 'Unfeasible', 10: 'Impossible'}
     else:
         names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard',
                  5: 'Very Hard', 6: 'Extreme', 7: 'Death'}
@@ -154,14 +154,18 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
         map_url = f'https://vnl.kz/#/map/{api_map.name}'
         if api_map.vnl_tier is not None and api_map.vnl_pro_tier is not None:
             tier_name = _tier_name(api_map.vnl_tier, mode)
-            pro_tier_name = _tier_name(api_map.vnl_pro_tier, mode)
-            tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
-**Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
+            if api_map.vnl_tier != api_map.vnl_pro_tier:
+                pro_tier_name = _tier_name(api_map.vnl_pro_tier, mode)
+                tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
+    **Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
+            else:
+                tier = f'**Tier**: {api_map.vnl_tier} - {tier_name}'
         else:
             tier = '**Tier**: (unknown)'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
                  5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
-                 9: 0x000000}.get(api_map.vnl_tier or 0, 0xcccccc)
+                 9: 0x555555, 10: 0x000000}.get(api_map.vnl_tier or 0,
+                                                0xcccccc)
     else:
         map_url = f'https://kzgo.eu/maps/{api_map.name}?{mode.lower()}'
         tier_name = _tier_name(api_map.tier, mode)

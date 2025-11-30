@@ -114,7 +114,7 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status == 404:
-                    raise APIMapError('Map not found on vnl.kz')
+                    return 10, 10
                 elif r.status != 200:
                     raise APIError("Couldn't get vnl.kz map tiers (HTTP %d)" %
                                    r.status)
