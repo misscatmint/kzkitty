@@ -105,7 +105,7 @@ async def slash_pb(ctx: GatewayContext,
     mode = player.mode if mode_name is None else Mode(mode_name)
     api_map = await map_for_name(map_name, mode)
     pb = await pb_for_steamid64(player.steamid64, api_map, mode,
-                                    Type(type_name))
+                                Type(type_name))
     if not pb:
         await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return

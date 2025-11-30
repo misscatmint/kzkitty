@@ -85,7 +85,7 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
         body = '## '
     body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
 
-**Mode**: {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
+**Mode**: {pb.mode}{' (PRO)' if pb.teleports == 0 else ''}
 **Tier**: {tier}
 **Time**: {_formattime(pb.time)}{f' (#{pb.place})' if top_100 else ''}
 """
@@ -140,7 +140,7 @@ async def profile_component(ctx: GatewayContext, player: Player,
     accent_color = Color(colors.get(profile.rank, 0xcccccc))
     body = f"""## [{player_name}]({profile_url})
 
-**Mode**: {profile.mode.upper()}
+**Mode**: {profile.mode}
 **Rank**: {profile.rank}
 **Points**: {profile.points:,}
 **Average**: {profile.average}
@@ -178,7 +178,7 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
 
     body = f"""## [{api_map.name}]({map_url})
 
-**Mode**: {mode.upper()}
+**Mode**: {mode}
 {tier}
 **TP**: {_formattime(tp_pb.time) if tp_pb is not None else '(none)'}
 **PRO**: {_formattime(pro_pb.time) if pro_pb is not None else '(none)'}
