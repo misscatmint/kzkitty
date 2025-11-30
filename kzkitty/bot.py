@@ -153,12 +153,15 @@ async def slash_profile(ctx: GatewayContext,
 async def slash_map(ctx: GatewayContext,
                     map_name: Option[str, StrParams('Map name', name='map')],
                     mode_name: Option[str | None, ModeParams]=None) -> None:
-    try:
-        player = await _get_player(ctx)
-    except PlayerNotFound:
-        mode = Mode.KZT
+    if mode_name is not None:
+        mode = Mode(mode_name)
     else:
-        mode = player.mode if mode_name is None else Mode(mode_name)
+        try:
+            player = await _get_player(ctx)
+        except PlayerNotFound:
+            mode = Mode.KZT
+        else:
+            mode = player.mode
     api_map = await map_for_name(map_name, mode)
     wrs = await wrs_for_map(api_map, mode)
     component = await map_component(ctx, api_map, mode, wrs)
