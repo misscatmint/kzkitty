@@ -158,7 +158,7 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
             tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
 **Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
         else:
-            tier = '(unknown)'
+            tier = '**Tier**: (unknown)'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
                  5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                  9: 0x000000}.get(api_map.vnl_tier or 0, 0xcccccc)
