@@ -70,6 +70,7 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
     player_name = pb.player_name or ctx.user.display_name
     profile_url = _profile_url(player.steamid64, pb.mode)
     map_url = _map_url(pb.map, pb.mode)
+
     if pb.mode == Mode.VNL:
         tier_num = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
         if tier_num is not None:
@@ -78,6 +79,7 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
             tier = '(unknown)'
     else:
         tier = f'{pb.map.tier} - {_tier_name(pb.map.tier, pb.mode)}'
+
     if pb.place is not None:
         medal = {1: ':first_place:', 2: ':second_place:',
                  3: ':third_place:'}.get(pb.place)
@@ -85,12 +87,20 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
     else:
         medal = None
         top_100 = False
+
+    if pb.points >= 900:
+        points = f'{pb.points} :fire:'
+        if medal is None:
+            medal = ':fire:'
+    elif pb.points >= 800:
+        points = f'{pb.points} :sparkles:'
+        if medal is None:
+            medal = ':sparkles:'
+    else:
+        points = f'{pb.points}'
+
     if medal is not None:
         body = f'## {medal} '
-    elif pb.points >= 900:
-        body = '## :fire: '
-    elif pb.points >= 800:
-        body = '## :sparkles: '
     else:
         body = '## '
     body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
@@ -102,7 +112,7 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
     if pb.teleports:
         body += f"""**Teleports**: {pb.teleports}
 """
-    body += f"""**Points**: {pb.points}
+    body += f"""**Points**: {points}
 """
 
     if pb.teleports == 0:
