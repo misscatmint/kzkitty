@@ -281,11 +281,12 @@ def _mode_for_record(record: dict) -> Mode:
 
 async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  teleport_type: Type=Type.ANY,
-                                 api_map: APIMap | None=None) -> list[dict]:
+                                 api_map: APIMap | None=None,
+                                 limit: int | None=None) -> list[dict]:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     url = ('https://kztimerglobal.com/api/v2.0/records/top?'
-           f'steamid64={steamid64}&stage=0&limit=9999&tickrate=128&'
+           f'steamid64={steamid64}&stage=0&tickrate=128&'
            f'modes_list_string={api_mode}')
     if teleport_type == Type.TP:
         url += '&has_teleports=true'
@@ -293,6 +294,10 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
         url += '&has_teleports=false'
     if api_map is not None:
         url += f'&map_name={api_map.name}'
+    if limit is not None:
+        url += f'&limit={limit}'
+    else:
+        url += f'&limit=9999'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -353,7 +358,8 @@ async def _place_for_pb(pb: PersonalBest) -> int:
 async def pb_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode,
                            teleport_type: Type=Type.ANY,
                            ) -> PersonalBest | None:
-    records = await _records_for_steamid64(steamid64, mode, api_map=api_map)
+    records = await _records_for_steamid64(steamid64, mode, api_map=api_map,
+                                           limit=2)
     pbs = [_record_to_pb(record, api_map) for record in records]
     if not pbs:
         return None
