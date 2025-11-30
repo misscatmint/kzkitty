@@ -25,6 +25,16 @@ async def _player_container(player: Player, accent_color: Color, body: str):
         container.add_text_display(body)
     return container
 
+def _tier_name(tier: int, mode: Mode) -> str:
+    if mode == Mode.VNL:
+        names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium',
+                 4: 'Advanced', 5: 'Hard', 6: 'Very Hard',
+                 7: 'Extreme', 8: 'Death', 9: 'Unfeasible'}
+    else:
+        names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard',
+                 5: 'Very Hard', 6: 'Extreme', 7: 'Death'}
+    return names.get(tier, 'Unknown')
+
 def _formattime(td: timedelta) -> str:
     mm, ss = divmod(td.seconds, 60)
     hh, mm = divmod(mm, 60)
@@ -49,11 +59,15 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
     if pb.mode == Mode.VNL:
         profile_url = f'https://vnl.kz/#/stats/{player.steamid64}'
         map_url = f'https://vnl.kz/#/map/{pb.map.name}'
-        tier = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
+        tier_num = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
+        if tier_num is not None:
+            tier = f'{tier_num} - {_tier_name(tier_num, pb.mode)}'
+        else:
+            tier = '(unknown)'
     else:
         profile_url = f'https://kzgo.eu/players/{player.steamid64}?{pb.mode}'
         map_url = f'https://kzgo.eu/maps/{pb.map.name}?{pb.mode}'
-        tier = pb.map.tier
+        tier = f'{pb.map.tier} - {_tier_name(pb.map.tier, pb.mode)}'
     if pb.place is not None:
         medal = {1: ':first_place:', 2: ':second_place:',
                  3: ':third_place:'}.get(pb.place)
@@ -72,7 +86,7 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
     body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
 
 **Mode**: {pb.mode.upper()}{' (PRO)' if pb.teleports == 0 else ''}
-**Tier**: {tier or '(unknown)'}
+**Tier**: {tier}
 **Time**: {_formattime(pb.time)}{f' (#{pb.place})' if top_100 else ''}
 """
     if pb.teleports:
@@ -137,24 +151,19 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
                         wrs: list[PersonalBest]) -> ContainerComponentBuilder:
     if mode == Mode.VNL:
         map_url = f'https://vnl.kz/#/map/{api_map.name}'
-        if api_map.vnl_tier is None or api_map.vnl_pro_tier is None:
-            tier = '(unknown)'
-        else:
-            tier_names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium',
-                          4: 'Advanced', 5: 'Hard', 6: 'Very Hard',
-                          7: 'Extreme', 8: 'Death', 9: 'Unfeasible'}
-            tier_name = tier_names.get(api_map.vnl_tier, 'Unknown')
-            pro_tier_name = tier_names.get(api_map.vnl_pro_tier, 'Unknown')
+        if api_map.vnl_tier is not None and api_map.vnl_pro_tier is not None:
+            tier_name = _tier_name(api_map.vnl_tier, mode)
+            pro_tier_name = _tier_name(api_map.vnl_pro_tier, mode)
             tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
 **Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
+        else:
+            tier = '(unknown)'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
                  5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                  9: 0x000000}.get(api_map.vnl_tier or 0, 0xcccccc)
     else:
         map_url = f'https://kzgo.eu/maps/{api_map.name}?{mode}'
-        tier_name = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard',
-                     5: 'Very Hard', 6: 'Extreme',
-                     7: 'Death'}.get(api_map.tier, 'Unknown')
+        tier_name = _tier_name(api_map.tier, mode)
         tier = f'**Tier**: {api_map.tier} - {tier_name}'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xf39c12, 4: 0xfd7e14,
                  5: 0xe74c3c, 6: 0xc52412, 7: 0xd22ce5}.get(api_map.tier,
