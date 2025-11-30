@@ -1,4 +1,4 @@
-Nice to have commands:
-
-- /map - show thumbnail, tp/pro wrs, link to map on kzgo.eu/vnl.kz for
-         given map/mode
+- Update /register to work on a per-Discord server basis
+- Convert from gateway to REST and run on CloudFlare Workers/D1
+- Make Discord add-on public for all servers to add
+- Add CS2KZ support
