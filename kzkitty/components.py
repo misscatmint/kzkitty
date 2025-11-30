@@ -181,8 +181,8 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
 
 **Mode**: {mode}
 {tier}
-**TP**: {_formattime(tp_pb.time) if tp_pb is not None else '(none)'}
-**PRO**: {_formattime(pro_pb.time) if pro_pb is not None else '(none)'}
+**WR** (TP): {_formattime(tp_pb.time) if tp_pb is not None else '(none)'}
+**WR** (PRO): {_formattime(pro_pb.time) if pro_pb is not None else '(none)'}
 """
     accent_color = Color(color)
     container = ContainerComponentBuilder(accent_color=accent_color)
