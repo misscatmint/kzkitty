@@ -65,8 +65,9 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
         else:
             tier = '(unknown)'
     else:
-        profile_url = f'https://kzgo.eu/players/{player.steamid64}?{pb.mode}'
-        map_url = f'https://kzgo.eu/maps/{pb.map.name}?{pb.mode}'
+        profile_url = (f'https://kzgo.eu/players/{player.steamid64}?'
+                       f'{pb.mode.lower()}')
+        map_url = f'https://kzgo.eu/maps/{pb.map.name}?{pb.mode.lower()}'
         tier = f'{pb.map.tier} - {_tier_name(pb.map.tier, pb.mode)}'
     if pb.place is not None:
         medal = {1: ':first_place:', 2: ':second_place:',
@@ -114,7 +115,7 @@ async def profile_component(ctx: GatewayContext, player: Player,
         profile_url = f'https://vnl.kz/#/stats/{player.steamid64}'
     else:
         profile_url = (f'https://kzgo.eu/players/{player.steamid64}?'
-                       f'{profile.mode}')
+                       f'{profile.mode.lower()}')
     colors = {Rank.BEGINNER_MINUS: 0xffffff,
               Rank.BEGINNER: 0xffffff,
               Rank.BEGINNER_PLUS: 0xffffff,
@@ -162,7 +163,7 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
                  5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                  9: 0x000000}.get(api_map.vnl_tier or 0, 0xcccccc)
     else:
-        map_url = f'https://kzgo.eu/maps/{api_map.name}?{mode}'
+        map_url = f'https://kzgo.eu/maps/{api_map.name}?{mode.lower()}'
         tier_name = _tier_name(api_map.tier, mode)
         tier = f'**Tier**: {api_map.tier} - {tier_name}'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xf39c12, 4: 0xfd7e14,
