@@ -261,8 +261,6 @@ async def map_for_name(name: str, mode: Mode) -> APIMap:
     if mode == Mode.VNL and (vnl_tier is None or vnl_pro_tier is None):
         try:
             vnl_tier, vnl_pro_tier = await _vnl_tiers_for_map(name)
-        except APIMapError:
-            vnl_tier = vnl_pro_tier = None
         except APIError:
             logger.exception("Couldn't get vnl.kz map tiers")
             vnl_tier = vnl_pro_tier = None
