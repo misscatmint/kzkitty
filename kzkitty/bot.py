@@ -163,6 +163,11 @@ async def slash_map(ctx: GatewayContext,
         else:
             mode = player.mode
     api_map = await map_for_name(map_name, mode)
+    # If the player has their mode set to VNL and they do /map on
+    # a VNL-impossible map, show KZT times if they didn't explicitly ask for
+    # VNL times.
+    if mode_name is None and mode == Mode.VNL and api_map.vnl_tier == 10:
+        mode = Mode.KZT
     wrs = await wrs_for_map(api_map, mode)
     component = await map_component(ctx, api_map, mode, wrs)
     await ctx.respond(component=component)
