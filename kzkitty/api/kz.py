@@ -414,7 +414,7 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
     try:
         pb.place = await _place_for_pb(pb)
     except APIError:
-        pass
+        logger.exception("Couldn't get global API PB place")
     return pb
 
 async def _record_for_map(api_map: APIMap, mode: Mode, teleport_type: Type
