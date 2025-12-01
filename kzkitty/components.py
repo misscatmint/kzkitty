@@ -1,7 +1,6 @@
 from datetime import timedelta
 
-from arc import GatewayContext
-from hikari import Color
+from hikari import Color, User
 from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
@@ -65,9 +64,9 @@ def _formattime(td: timedelta) -> str:
         s = s.rstrip('0').rstrip('.')
     return s
 
-async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
+async def pb_component(pb: PersonalBest, player: Player, user: User
                        ) -> ContainerComponentBuilder:
-    player_name = pb.player_name or ctx.user.display_name
+    player_name = pb.player_name or user.display_name
     profile_url = _profile_url(player.steamid64, pb.mode)
     map_url = _map_url(pb.map, pb.mode)
 
@@ -129,9 +128,9 @@ async def pb_component(ctx: GatewayContext, player: Player, pb: PersonalBest
     container.add_text_display(f'-# <t:{int(pb.date.timestamp())}>')
     return container
 
-async def profile_component(ctx: GatewayContext, player: Player,
-                            profile: Profile) -> ContainerComponentBuilder:
-    player_name = profile.player_name or ctx.user.display_name
+async def profile_component(profile: Profile, player: Player, user: User
+                            ) -> ContainerComponentBuilder:
+    player_name = profile.player_name or user.display_name
     profile_url = _profile_url(player.steamid64, profile.mode)
     colors = {Rank.BEGINNER_MINUS: 0xffffff,
               Rank.BEGINNER: 0xffffff,
@@ -165,8 +164,8 @@ async def profile_component(ctx: GatewayContext, player: Player,
 """
     return await _player_container(player, accent_color, body)
 
-async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
-                        wrs: list[PersonalBest]) -> ContainerComponentBuilder:
+async def map_component(api_map: APIMap, mode: Mode, wrs: list[PersonalBest]
+                        ) -> ContainerComponentBuilder:
     map_url = _map_url(api_map, mode)
     if mode == Mode.VNL:
         if api_map.vnl_tier is not None and api_map.vnl_pro_tier is not None:

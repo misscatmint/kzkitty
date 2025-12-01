@@ -110,7 +110,7 @@ async def slash_pb(ctx: GatewayContext,
         await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return
 
-    component = await pb_component(ctx, player, pb)
+    component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
 @client.include
@@ -133,7 +133,7 @@ async def slash_latest(ctx: GatewayContext,
         await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return
 
-    component = await pb_component(ctx, player, pb)
+    component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
 @client.include
@@ -145,7 +145,7 @@ async def slash_profile(ctx: GatewayContext,
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     profile = await profile_for_steamid64(player.steamid64, mode)
-    component = await profile_component(ctx, player, profile)
+    component = await profile_component(profile, player, ctx.user)
     await ctx.respond(component=component)
 
 @client.include
@@ -169,5 +169,5 @@ async def slash_map(ctx: GatewayContext,
     if mode_name is None and mode == Mode.VNL and api_map.vnl_tier == 10:
         mode = Mode.KZT
     wrs = await wrs_for_map(api_map, mode)
-    component = await map_component(ctx, api_map, mode, wrs)
+    component = await map_component(api_map, mode, wrs)
     await ctx.respond(component=component)
