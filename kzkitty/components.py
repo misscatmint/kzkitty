@@ -25,7 +25,7 @@ async def _player_container(player: Player, accent_color: Color, body: str):
         container.add_text_display(body)
     return container
 
-def _map_url(api_map: Map, mode: Mode) -> str:
+def _map_url(api_map: APIMap, mode: Mode) -> str:
     if mode == Mode.VNL:
         return f'https://vnl.kz/#/map/{api_map.name}'
     else:
