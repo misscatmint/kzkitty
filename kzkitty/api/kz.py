@@ -296,7 +296,7 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
     if limit is not None:
         url += f'&limit={limit}'
     else:
-        url += f'&limit=9999'
+        url += '&limit=9999'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
