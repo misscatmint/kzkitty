@@ -91,19 +91,19 @@ async def _vnl_tiers() -> dict[str, tuple[int, int]]:
         return {}
 
     if not isinstance(json, list):
-        logger.error('Malformed global API maps response (not a list)')
+        logger.error('Malformed vnl.kz API maps response (not a list)')
         return {}
 
     maps = {}
     for map_info in json:
         name = map_info.get('name')
         if not isinstance(name, str):
-            logger.error('Malformed global API maps response (name not a str)')
+            logger.error('Malformed vnl.kz API maps response (name not a str)')
             continue
         tp_tier = map_info.get('tpTier')
         pro_tier = map_info.get('proTier')
         if not isinstance(tp_tier, int) or not isinstance(pro_tier, int):
-            logger.error('Malformed global API maps response'
+            logger.error('Malformed vnl.kz API maps response'
                          ' (tp/pro tiers not ints)')
             continue
         maps[name] = (tp_tier, pro_tier)
