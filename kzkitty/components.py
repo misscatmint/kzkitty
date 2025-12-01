@@ -191,7 +191,7 @@ async def map_component(ctx: GatewayContext, api_map: APIMap, mode: Mode,
                                                             0xcccccc)
 
     tp_pb = pro_pb = None
-    tp_pb_time = tp_pro_time = '(none)'
+    tp_pb_time = pro_pb_time = '(none)'
     for pb in wrs:
         if pb.teleports == 0:
             pro_pb = pb
