@@ -180,7 +180,7 @@ async def refresh_db_maps() -> tuple[int, int]:
             logger.error('Malformed global API maps response'
                          ' (tier not an int)')
             continue
-        vnl_tier, vnl_pro_tier = vnl_tiers.get(name, (None, None))
+        vnl_tier, vnl_pro_tier = vnl_tiers.get(name, (10, 10))
         try:
             db_map = await Map.get(name=name)
         except DoesNotExist:
