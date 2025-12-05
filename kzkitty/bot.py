@@ -138,18 +138,6 @@ async def slash_latest(ctx: GatewayContext,
     await ctx.respond(component=component)
 
 @client.include
-@slash_command('profile', 'Show rank, point total, and point average')
-async def slash_profile(ctx: GatewayContext,
-                        mode_name: Option[str | None, ModeParams]=None,
-                        player_member: Option[Member | None, PlayerParams]=None
-                        ) -> None:
-    player = await _get_player(ctx, player_member)
-    mode = player.mode if mode_name is None else Mode(mode_name)
-    profile = await profile_for_steamid64(player.steamid64, mode)
-    component = await profile_component(profile, player, ctx.user)
-    await ctx.respond(component=component)
-
-@client.include
 @slash_command('map', 'Show map info and world record times')
 async def slash_map(ctx: GatewayContext,
                     map_name: Option[str, StrParams('Map name', name='map')],
@@ -173,4 +161,16 @@ async def slash_map(ctx: GatewayContext,
         mode = Mode.KZT
     wrs = await wrs_for_map(api_map, mode, stage)
     component = await map_component(api_map, mode, stage, wrs)
+    await ctx.respond(component=component)
+
+@client.include
+@slash_command('profile', 'Show rank, point total, and point average')
+async def slash_profile(ctx: GatewayContext,
+                        mode_name: Option[str | None, ModeParams]=None,
+                        player_member: Option[Member | None, PlayerParams]=None
+                        ) -> None:
+    player = await _get_player(ctx, player_member)
+    mode = player.mode if mode_name is None else Mode(mode_name)
+    profile = await profile_for_steamid64(player.steamid64, mode)
+    component = await profile_component(profile, player, ctx.user)
     await ctx.respond(component=component)
