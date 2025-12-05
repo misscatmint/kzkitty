@@ -24,8 +24,11 @@ async def _player_container(player: Player, accent_color: Color, body: str):
         container.add_text_display(body)
     return container
 
-def _map_url(api_map: APIMap, mode: Mode) -> str:
-    if mode == Mode.VNL:
+def _map_url(api_map: APIMap, mode: Mode, stage: int) -> str:
+    if stage != 0:
+        return (f'https://kzgo.eu/maps/{api_map.name}?{mode.lower()}'
+                f'&bonus={stage}')
+    elif mode == Mode.VNL:
         return f'https://vnl.kz/#/map/{api_map.name}'
     else:
         return f'https://kzgo.eu/maps/{api_map.name}?{mode.lower()}'
@@ -68,7 +71,7 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
                        ) -> ContainerComponentBuilder:
     player_name = pb.player_name or user.display_name
     profile_url = _profile_url(player.steamid64, pb.mode)
-    map_url = _map_url(pb.map, pb.mode)
+    map_url = _map_url(pb.map, pb.mode, pb.stage)
 
     if pb.stage != 0:
         extra = f'**Bonus**: {pb.stage}'
@@ -168,7 +171,7 @@ async def profile_component(profile: Profile, player: Player, user: User
 
 async def map_component(api_map: APIMap, mode: Mode, stage: int,
                         wrs: list[PersonalBest]) -> ContainerComponentBuilder:
-    map_url = _map_url(api_map, mode)
+    map_url = _map_url(api_map, mode, stage)
     if stage != 0:
         extra = f'**Bonus**: {stage}'
         color = 0xcccccc
