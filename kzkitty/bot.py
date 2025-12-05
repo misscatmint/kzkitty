@@ -1,8 +1,7 @@
 import os
 from typing import Any
 
-from arc import (GatewayClient, GatewayContext, MemberParams, Option,
-                 StrParams, slash_command)
+from arc import (GatewayClient, GatewayContext, IntParams, MemberParams, Option, StrParams, slash_command)
 from hikari import Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
@@ -24,6 +23,7 @@ ModeParams = StrParams('Game mode', name='mode',
 PlayerParams = MemberParams('Player', name='player')
 TypeParams = StrParams('Pro or teleport run', name='type',
                        choices=[Type.PRO, Type.TP, Type.ANY])
+StageParams = IntParams('Bonus stage', name='bonus', min=1)
 
 class PlayerNotFound(Exception):
     pass
@@ -99,13 +99,14 @@ async def slash_pb(ctx: GatewayContext,
                    map_name: Option[str, StrParams('Map name', name='map')],
                    type_name: Option[str, TypeParams]=Type.ANY,
                    mode_name: Option[str | None, ModeParams]=None,
+                   stage: Option[int, StageParams]=0,
                    player_member: Option[Member | None, PlayerParams]=None
                    ) -> None:
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     api_map = await map_for_name(map_name, mode)
     pb = await pb_for_steamid64(player.steamid64, api_map, mode,
-                                Type(type_name))
+                                Type(type_name), stage)
     if not pb:
         await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
         return
@@ -152,7 +153,8 @@ async def slash_profile(ctx: GatewayContext,
 @slash_command('map', 'Show map info and world record times')
 async def slash_map(ctx: GatewayContext,
                     map_name: Option[str, StrParams('Map name', name='map')],
-                    mode_name: Option[str | None, ModeParams]=None) -> None:
+                    mode_name: Option[str | None, ModeParams]=None,
+                    stage: Option[int, StageParams]=0) -> None:
     if mode_name is not None:
         mode = Mode(mode_name)
     else:
@@ -166,8 +168,9 @@ async def slash_map(ctx: GatewayContext,
     # If the player has their mode set to VNL and they do /map on
     # a VNL-impossible map, show KZT times if they didn't explicitly ask for
     # VNL times.
-    if mode_name is None and mode == Mode.VNL and api_map.vnl_tier == 10:
+    if (stage == 0 and mode_name is None and mode == Mode.VNL and
+        api_map.vnl_tier == 10):
         mode = Mode.KZT
-    wrs = await wrs_for_map(api_map, mode)
-    component = await map_component(api_map, mode, wrs)
+    wrs = await wrs_for_map(api_map, mode, stage)
+    component = await map_component(api_map, mode, stage, wrs)
     await ctx.respond(component=component)

@@ -70,14 +70,16 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
     profile_url = _profile_url(player.steamid64, pb.mode)
     map_url = _map_url(pb.map, pb.mode)
 
-    if pb.mode == Mode.VNL:
+    if pb.stage != 0:
+        extra = f'**Bonus**: {pb.stage}'
+    elif pb.mode == Mode.VNL:
         tier_num = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
         if tier_num is not None:
-            tier = f'{tier_num} - {_tier_name(tier_num, pb.mode)}'
+            extra = f'**Tier**: {tier_num} - {_tier_name(tier_num, pb.mode)}'
         else:
-            tier = '(unknown)'
+            extra = '**Tier**: (unknown)'
     else:
-        tier = f'{pb.map.tier} - {_tier_name(pb.map.tier, pb.mode)}'
+        extra = f'**Tier**: {pb.map.tier} - {_tier_name(pb.map.tier, pb.mode)}'
 
     if pb.place is not None:
         medal = {1: ':first_place:', 2: ':second_place:',
@@ -107,7 +109,7 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
     body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
 
 **Mode**: {pb.mode}{' (PRO)' if pb.teleports == 0 else ''}
-**Tier**: {tier}
+{extra}
 **Time**: {_formattime(pb.time)}{f' (#{pb.place})' if top_100 else ''}
 """
     if pb.teleports:
@@ -164,27 +166,30 @@ async def profile_component(profile: Profile, player: Player, user: User
 """
     return await _player_container(player, accent_color, body)
 
-async def map_component(api_map: APIMap, mode: Mode, wrs: list[PersonalBest]
-                        ) -> ContainerComponentBuilder:
+async def map_component(api_map: APIMap, mode: Mode, stage: int,
+                        wrs: list[PersonalBest]) -> ContainerComponentBuilder:
     map_url = _map_url(api_map, mode)
-    if mode == Mode.VNL:
+    if stage != 0:
+        extra = f'**Bonus**: {stage}'
+        color = 0xcccccc
+    elif mode == Mode.VNL:
         if api_map.vnl_tier is not None and api_map.vnl_pro_tier is not None:
             tier_name = _tier_name(api_map.vnl_tier, mode)
             if api_map.vnl_tier != api_map.vnl_pro_tier:
                 pro_tier_name = _tier_name(api_map.vnl_pro_tier, mode)
-                tier = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
+                extra = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
 **Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
             else:
-                tier = f'**Tier**: {api_map.vnl_tier} - {tier_name}'
+                extra = f'**Tier**: {api_map.vnl_tier} - {tier_name}'
         else:
-            tier = '**Tier**: (unknown)'
+            extra = '**Tier**: (unknown)'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
                  5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                  9: 0x555555, 10: 0x000000}.get(api_map.vnl_tier or 0,
                                                 0xcccccc)
     else:
         tier_name = _tier_name(api_map.tier, mode)
-        tier = f'**Tier**: {api_map.tier} - {tier_name}'
+        extra = f'**Tier**: {api_map.tier} - {tier_name}'
         color = {1: 0x049c49, 2: 0x007053, 3: 0xf39c12, 4: 0xfd7e14,
                  5: 0xe74c3c, 6: 0xc52412, 7: 0xd22ce5}.get(api_map.tier,
                                                             0xcccccc)
@@ -210,7 +215,7 @@ async def map_component(api_map: APIMap, mode: Mode, wrs: list[PersonalBest]
     body = f"""## [{api_map.name}]({map_url})
 
 **Mode**: {mode}
-{tier}
+{extra}
 **WR** (TP): {tp_pb_time}
 **WR** (PRO): {pro_pb_time}
 """

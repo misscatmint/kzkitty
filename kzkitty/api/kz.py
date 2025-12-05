@@ -61,6 +61,7 @@ class PersonalBest:
     steamid64: int
     player_name: str | None
     map: APIMap
+    stage: int
     mode: Mode
     time: timedelta
     teleports: int
@@ -281,12 +282,15 @@ def _mode_for_record(record: dict) -> Mode:
 async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  teleport_type: Type=Type.ANY,
                                  api_map: APIMap | None=None,
+                                 stage: int | None=None,
                                  limit: int | None=None) -> list[dict]:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     url = ('https://kztimerglobal.com/api/v2.0/records/top?'
-           f'steamid64={steamid64}&stage=0&tickrate=128&'
+           f'steamid64={steamid64}&tickrate=128&'
            f'modes_list_string={api_mode}')
+    if stage is not None:
+        url += f'&stage={stage}'
     if teleport_type == Type.TP:
         url += '&has_teleports=true'
     elif teleport_type == Type.PRO:
@@ -324,12 +328,14 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
     if not isinstance(player_name, str) and player_name is not None:
         raise APIError('Malformed global API PB (bad player_name)')
     mode = _mode_for_record(record)
+    stage = record.get('stage')
     record_id = record.get('id')
     time = record.get('time')
     teleports = record.get('teleports')
     points = record.get('points')
     created_on = record.get('created_on')
-    if (not isinstance(record_id, int) or
+    if (not isinstance(stage, int) or
+        not isinstance(record_id, int) or
         not isinstance(time, float) or
         not isinstance(teleports, int) or
         not isinstance(points, int) or
@@ -342,7 +348,7 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
     date = date.replace(tzinfo=timezone.utc)
 
     return PersonalBest(id=record_id, steamid64=steamid64,
-                        player_name=player_name, map=api_map,
+                        player_name=player_name, map=api_map, stage=stage,
                         time=timedelta(seconds=time), mode=mode,
                         teleports=teleports, points=points, place=None,
                         date=date)
@@ -363,10 +369,10 @@ async def _place_for_pb(pb: PersonalBest) -> int:
     return place
 
 async def pb_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode,
-                           teleport_type: Type=Type.ANY,
+                           teleport_type: Type=Type.ANY, stage: int=0
                            ) -> PersonalBest | None:
     records = await _records_for_steamid64(steamid64, mode, api_map=api_map,
-                                           limit=2)
+                                           stage=stage, limit=2)
     pbs = [_record_to_pb(record, api_map) for record in records]
     if not pbs:
         return None
@@ -384,16 +390,15 @@ async def pb_for_steamid64(steamid64: int, api_map: APIMap, mode: Mode,
     return pbs[0]
 
 async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
-                                  teleport_type: Type=Type.ANY,
+                                  teleport_type: Type=Type.ANY
                                   ) -> PersonalBest | None:
-
     if teleport_type in {Type.TP, Type.ANY}:
-        records = await _records_for_steamid64(steamid64, mode,
+        records = await _records_for_steamid64(steamid64, mode, stage=0,
                                                teleport_type=Type.TP)
     else:
         records = []
     if teleport_type in {Type.PRO, Type.ANY}:
-        pros = await _records_for_steamid64(steamid64, mode,
+        pros = await _records_for_steamid64(steamid64, mode, stage=0,
                                             teleport_type=Type.PRO)
     else:
         pros = []
@@ -417,12 +422,12 @@ async def latest_pb_for_steamid64(steamid64: int, mode: Mode,
         logger.exception("Couldn't get global API PB place")
     return pb
 
-async def _record_for_map(api_map: APIMap, mode: Mode, teleport_type: Type
-                          ) -> dict | None:
+async def _record_for_map(api_map: APIMap, mode: Mode, teleport_type: Type,
+                          stage: int) -> dict | None:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     url = ('https://kztimerglobal.com/api/v2.0/records/top'
-           f'?map_name={api_map.name}&stage=0&'
+           f'?map_name={api_map.name}&stage={stage}&'
            f'modes_list_string={api_mode}&limit=1')
     if teleport_type == Type.TP:
         url += '&has_teleports=true'
@@ -443,16 +448,17 @@ async def _record_for_map(api_map: APIMap, mode: Mode, teleport_type: Type
         raise APIError('Malformed global API WR (not a list of dicts)')
     return records[0] if records else None
 
-async def wrs_for_map(api_map: APIMap, mode: Mode) -> list[PersonalBest]:
-    records = [await _record_for_map(api_map, mode, teleport_type)
+async def wrs_for_map(api_map: APIMap, mode: Mode, stage: int
+                      ) -> list[PersonalBest]:
+    records = [await _record_for_map(api_map, mode, teleport_type, stage)
                for teleport_type in (Type.TP, Type.PRO)]
     return [_record_to_pb(record, api_map) for record in records if record]
 
 async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
     records = await _records_for_steamid64(steamid64, mode,
-                                           teleport_type=Type.TP)
+                                           teleport_type=Type.TP, stage=0)
     records += await _records_for_steamid64(steamid64, mode,
-                                            teleport_type=Type.PRO)
+                                            teleport_type=Type.PRO, stage=0)
     if not records:
         try:
             player_name = await name_for_steamid64(steamid64)
