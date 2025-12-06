@@ -39,11 +39,11 @@ async def _get_player(ctx: GatewayContext, player_member: Member | None=None
 @client.set_error_handler
 async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
     if isinstance(exc, PlayerNotFound):
-        await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('Not registered', flags=MessageFlag.EPHEMERAL)
         return
     elif isinstance(exc, APIMapAmbiguousError):
         if len(exc.db_maps) > 10:
-            await ctx.respond('More than 10 maps found!',
+            await ctx.respond('More than 10 maps found',
                               flags=MessageFlag.EPHEMERAL)
         else:
             map_names = sorted(m.name for m in exc.db_maps)
@@ -51,13 +51,13 @@ async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
                               flags=MessageFlag.EPHEMERAL)
         return
     elif isinstance(exc, APIMapError):
-        await ctx.respond('Map not found!', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('Map not found', flags=MessageFlag.EPHEMERAL)
         return
     elif isinstance(exc, SteamError):
-        await ctx.respond("Couldn't access Steam API!",
+        await ctx.respond("Couldn't access Steam API",
                           flags=MessageFlag.EPHEMERAL)
     elif isinstance(exc, APIError):
-        await ctx.respond("Couldn't access global API!",
+        await ctx.respond("Couldn't access global API",
                           flags=MessageFlag.EPHEMERAL)
     raise exc
 
@@ -70,7 +70,7 @@ async def slash_register(ctx: GatewayContext,
     try:
         steamid64 = await steamid64_for_profile(profile)
     except SteamValueError:
-        await ctx.respond('Invalid Steam profile URL!',
+        await ctx.respond('Invalid Steam profile URL',
                           flags=MessageFlag.EPHEMERAL)
     else:
         defaults: dict[str, Any] = {'steamid64': steamid64}
@@ -78,14 +78,14 @@ async def slash_register(ctx: GatewayContext,
         await Player.update_or_create(user_id=ctx.user.id,
                                       server_id=ctx.guild_id,
                                       defaults=defaults)
-        await ctx.respond('Registered!', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
 
 @client.include
 @slash_command('unregister', 'Delete account settings')
 async def slash_unregister(ctx: GatewayContext) -> None:
     player = await _get_player(ctx)
     await player.delete()
-    await ctx.respond('Unregistered!', flags=MessageFlag.EPHEMERAL)
+    await ctx.respond('Unregistered', flags=MessageFlag.EPHEMERAL)
 
 @client.include
 @slash_command('mode', 'Show or set default game mode')
@@ -93,7 +93,7 @@ async def slash_mode(ctx: GatewayContext,
                      mode_name: Option[str | None, ModeParams]=None) -> None:
     if mode_name is None:
         player = await _get_player(ctx)
-        await ctx.respond(f'Mode set to {player.mode}.',
+        await ctx.respond(f'Mode set to {player.mode}',
                           flags=MessageFlag.EPHEMERAL)
         return
 
@@ -101,7 +101,7 @@ async def slash_mode(ctx: GatewayContext,
     await Player.update_or_create(user_id=ctx.user.id,
                                   server_id=ctx.guild_id,
                                   defaults=defaults)
-    await ctx.respond(f'Mode set to {mode_name}.',
+    await ctx.respond(f'Mode set to {mode_name}',
                       flags=MessageFlag.EPHEMERAL)
 
 @client.include
@@ -119,7 +119,7 @@ async def slash_pb(ctx: GatewayContext,
     pb = await pb_for_steamid64(player.steamid64, api_map, mode,
                                 Type(type_name), stage)
     if not pb:
-        await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
 
     component = await pb_component(pb, player, ctx.user)
@@ -137,7 +137,7 @@ async def slash_latest(ctx: GatewayContext,
     pb = await latest_pb_for_steamid64(player.steamid64, mode,
                                        Type(type_name))
     if not pb:
-        await ctx.respond('No PB found!', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
 
     component = await pb_component(pb, player, ctx.user)
