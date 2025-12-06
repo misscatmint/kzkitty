@@ -79,6 +79,13 @@ async def slash_register(ctx: GatewayContext,
         await ctx.respond('Registered!', flags=MessageFlag.EPHEMERAL)
 
 @client.include
+@slash_command('unregister', 'Delete account settings')
+async def slash_unregister(ctx: GatewayContext) -> None:
+    player = await _get_player(ctx)
+    await player.delete()
+    await ctx.respond('Unregistered!', flags=MessageFlag.EPHEMERAL)
+
+@client.include
 @slash_command('mode', 'Show or set default game mode')
 async def slash_mode(ctx: GatewayContext,
                      mode_name: Option[str | None, ModeParams]=None) -> None:
