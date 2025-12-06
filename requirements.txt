@@ -17,7 +17,7 @@ multidict==6.7.0
 propcache==0.4.1
 pycparser==2.23
 pynacl==1.6.1
-pypika-tortoise==0.6.2
+pypika-tortoise==0.6.3
 python-dateutil==2.9.0.post0
 pytz==2025.2
 six==1.17.0
