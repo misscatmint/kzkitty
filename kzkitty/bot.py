@@ -128,11 +128,6 @@ async def slash_latest(ctx: GatewayContext,
                        mode_name: Option[str | None, ModeParams]=None,
                        player_member: Option[Member | None, PlayerParams]=None
                        ) -> None:
-    try:
-        player = await Player.get(id=(player_member or ctx.user).id)
-    except DoesNotExist:
-        await ctx.respond('Not registered!', flags=MessageFlag.EPHEMERAL)
-        return
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     pb = await latest_pb_for_steamid64(player.steamid64, mode,
