@@ -2,7 +2,7 @@ import os
 from typing import Any
 
 from arc import (GatewayClient, GatewayContext, IntParams, MemberParams, Option, StrParams, slash_command)
-from hikari import Member, MessageFlag
+from hikari import Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz import (APIError, APIMapError, APIMapAmbiguousError,
@@ -15,7 +15,7 @@ from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.gateway import GatewayBot
 from kzkitty.models import Mode, Player, Type
 
-bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'])
+bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
 client = GatewayClient(bot)
 
 ModeParams = StrParams('Game mode', name='mode',
