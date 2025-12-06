@@ -55,11 +55,13 @@ services:
       - KZKITTY_DB=/etc/kzkitty/kzkitty.db
       - KZKITTY_DEFAULT_PLAYERS=/etc/kzkitty/players.csv
       - KZKITTY_DISCORD_TOKEN=...
+      - TZ=America/Chicago
     volumes:
       - './etc-kzkitty:/etc/kzkitty'
 ```
 
-Then build and start the service:
+Change `TZ` to the timezone to use for nightly map database refreshes. Then
+build and start the service:
 
 ```sh
 docker compose up --build -d kzkitty
