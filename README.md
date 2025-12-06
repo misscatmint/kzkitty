@@ -33,12 +33,12 @@ Optionally set the `KZKITTY_INITIAL_PLAYERS` environment variable to point to
 a CSV file in the following format:
 
 ```csv
-id,steamid64,mode
+user_id,server_id,steamid64,mode
 ...
 ```
 
-This will prepopulate the database with Discord IDs mapped to Steam IDs and
-preferred KZ game modes.
+This will prepopulate the database with Discord users mapped to Steam IDs and
+preferred KZ game modes (on a per-Discord server basis).
 
 To deploy with Docker Compose, use a `docker-compose.yaml` file:
 

@@ -21,9 +21,13 @@ class Map(Model):
     thumbnail = fields.BinaryField(null=True)
 
 class Player(Model):
-    id = fields.IntField(primary_key=True)
+    user_id = fields.IntField()
+    server_id = fields.IntField()
     steamid64 = fields.IntField(null=True)
     mode = fields.CharEnumField(Mode, default=Mode.KZT)
+
+    class Meta: # type: ignore
+        unique_together = ('user_id', 'server_id')
 
 async def init_db() -> None:
     await Tortoise.init(

@@ -31,7 +31,8 @@ class PlayerNotFound(Exception):
 async def _get_player(ctx: GatewayContext, player_member: Member | None=None
                       ) -> Player:
     try:
-        return await Player.get(id=(player_member or ctx.user).id)
+        return await Player.get(user_id=(player_member or ctx.user).id,
+                                server_id=ctx.guild_id)
     except DoesNotExist:
         raise PlayerNotFound
 
@@ -64,7 +65,7 @@ async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
 @slash_command('register', 'Register account')
 async def slash_register(ctx: GatewayContext,
                          profile: Option[str, StrParams('Steam profile URL')],
-                         mode_name: Option[str | None, ModeParams]=None
+                         mode_name: Option[str | None, ModeParams]=Mode.KZT
                          ) -> None:
     try:
         steamid64 = await steamid64_for_profile(profile)
@@ -73,9 +74,10 @@ async def slash_register(ctx: GatewayContext,
                           flags=MessageFlag.EPHEMERAL)
     else:
         defaults: dict[str, Any] = {'steamid64': steamid64}
-        if mode_name is not None:
-            defaults['mode'] = mode_name
-        await Player.update_or_create(id=ctx.user.id, defaults=defaults)
+        defaults['mode'] = mode_name
+        await Player.update_or_create(user_id=ctx.user.id,
+                                      server_id=ctx.guild_id,
+                                      defaults=defaults)
         await ctx.respond('Registered!', flags=MessageFlag.EPHEMERAL)
 
 @client.include
@@ -96,7 +98,9 @@ async def slash_mode(ctx: GatewayContext,
         return
 
     defaults = {'mode': mode_name}
-    await Player.update_or_create(id=ctx.user.id, defaults=defaults)
+    await Player.update_or_create(user_id=ctx.user.id,
+                                  server_id=ctx.guild_id,
+                                  defaults=defaults)
     await ctx.respond(f'Mode set to {mode_name}.',
                       flags=MessageFlag.EPHEMERAL)
 

@@ -20,9 +20,12 @@ class GatewayBot(hikari.GatewayBot):
             with open(default_player_file, newline='') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    discord_id = int(row['id'])
-                    if not await Player.exists(id=discord_id):
-                        users.append(Player(id=discord_id,
+                    user_id = int(row['user_id'])
+                    server_id = int(row['server_id'])
+                    if not await Player.exists(user_id=user_id,
+                                               server_id=server_id):
+                        users.append(Player(user_id=user_id,
+                                            server_id=server_id,
                                             steamid64=int(row['steamid64']),
                                             mode=Mode(row['mode'])))
             await Player.bulk_create(users)
