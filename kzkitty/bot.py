@@ -1,7 +1,8 @@
 import os
 from typing import Any
 
-from arc import (GatewayClient, GatewayContext, IntParams, MemberParams, Option, StrParams, slash_command)
+from arc import (AutocompleteData, GatewayClient, GatewayContext, IntParams,
+                 MemberParams, Option, StrParams, slash_command)
 from hikari import Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
@@ -13,11 +14,23 @@ from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
 from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.gateway import GatewayBot
-from kzkitty.models import Mode, Player, Type
+from kzkitty.models import Map, Mode, Player, Type
 
 bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
 client = GatewayClient(bot)
 
+async def autocomplete_map(data: AutocompleteData[GatewayClient, str]
+                           ) -> list[str]:
+    if not data.focused_value:
+        return []
+    name = data.focused_value.lower()
+    if len(name) < 3 or name in {'kz_', 'bkz', 'bkz_'}:
+        return []
+    maps = await Map.filter(name__contains=name).order_by('name').limit(25)
+    return [m.name for m in maps]
+
+MapParams = StrParams('Map name', name='map',
+                      autocomplete_with=autocomplete_map)
 ModeParams = StrParams('Game mode', name='mode',
                        choices=[Mode.KZT, Mode.SKZ, Mode.VNL])
 PlayerParams = MemberParams('Player', name='player')
@@ -107,7 +120,7 @@ async def slash_mode(ctx: GatewayContext,
 @client.include
 @slash_command('pb', 'Show personal best times')
 async def slash_pb(ctx: GatewayContext,
-                   map_name: Option[str, StrParams('Map name', name='map')],
+                   map_name: Option[str, MapParams],
                    type_name: Option[str, TypeParams]=Type.ANY,
                    mode_name: Option[str | None, ModeParams]=None,
                    stage: Option[int, StageParams]=0,
@@ -146,7 +159,7 @@ async def slash_latest(ctx: GatewayContext,
 @client.include
 @slash_command('map', 'Show map info and world record times')
 async def slash_map(ctx: GatewayContext,
-                    map_name: Option[str, StrParams('Map name', name='map')],
+                    map_name: Option[str, MapParams],
                     mode_name: Option[str | None, ModeParams]=None,
                     stage: Option[int, StageParams]=0) -> None:
     if mode_name is not None:
