@@ -9,4 +9,4 @@ COPY requirements.txt .
 RUN uv pip install -r requirements.txt
 
 COPY . .
-CMD ["python", "-O", "-m", "kzkitty"]
+CMD ["python", "-OO", "-m", "kzkitty"]
