@@ -149,7 +149,7 @@ async def _thumbnail_for_map(name: str) -> bytes | None:
         logger.exception("Couldn't get map thumbnail")
     return thumbnail
 
-async def refresh_db_maps() -> tuple[int, int]:
+async def refresh_db_maps() -> None:
     logger.info('Downloading map tiers')
     url = ('https://kztimerglobal.com/api/v2.0'
            '/maps?is_validated=true&limit=9999')
@@ -157,14 +157,17 @@ async def refresh_db_maps() -> tuple[int, int]:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    raise APIError("Couldn't get global API maps (HTTP %d)" %
-                                   r.status)
+                    logger.error("Couldn't get global API maps (HTTP %d)",
+                                 r.status)
+                    return
                 json = await r.json()
-    except ClientError as e:
-        raise APIError("Couldn't get global API maps") from e
+    except ClientError:
+        logger.exception("Couldn't get global API maps")
+        return
 
     if not isinstance(json, list):
-        raise APIError('Malformed global API maps response (not a list)')
+        logger.error('Malformed global API maps response (not a list)')
+        return
 
     logger.info('Downloading VNL map tiers')
     vnl_tiers = await _vnl_tiers()
@@ -215,7 +218,7 @@ async def refresh_db_maps() -> tuple[int, int]:
             if changed:
                 await db_map.save()
                 updated += 1
-    return new, updated
+    logger.info('Refreshed map database (%d new, %d updated)', new, updated)
 
 async def map_for_name(name: str, mode: Mode) -> APIMap:
     if not re.fullmatch('[A-za-z0-9_]+', name):

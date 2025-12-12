@@ -5,7 +5,7 @@ import os
 import hikari
 from aiocron import crontab
 
-from kzkitty.api.kz import APIError, refresh_db_maps
+from kzkitty.api.kz import refresh_db_maps
 from kzkitty.models import Mode, Player, close_db, init_db
 
 logger = logging.getLogger('kzkitty.gateway')
@@ -34,12 +34,9 @@ class GatewayBot(hikari.GatewayBot):
                             default_player_file)
 
         try:
-            new, updated = await refresh_db_maps()
-        except APIError:
+            await refresh_db_maps()
+        except Exception:
             logger.exception('Failed to refresh map database')
-        else:
-            logger.info('Refreshed map database (%d new, %d updated)',
-                        new, updated)
 
         crontab('0 0 * * *', func=refresh_db_maps)
 
