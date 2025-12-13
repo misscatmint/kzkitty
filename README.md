@@ -11,6 +11,10 @@ Available commands:
 - `/register` - register a steam profile url and default mode with the bot
 - `/mode` - change the default mode to use for commands
 
+<img alt="screenshot of /pb, /map, /profile" src="screenshot.png" width="672">
+
+## Development
+
 To set up a dev environment (with `uv`):
 
 ```sh
@@ -39,6 +43,8 @@ user_id,server_id,steamid64,mode
 
 This will prepopulate the database with Discord users mapped to Steam IDs and
 preferred KZ game modes (on a per-Discord server basis).
+
+## Deployment
 
 To deploy with Docker Compose, use a `docker-compose.yaml` file:
 
