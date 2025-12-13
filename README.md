@@ -30,7 +30,7 @@ Then, to run locally:
 
 ```sh
 source .venv/bin/activate
-KZKITTY_DB=kzkitty.db KZKITTY_DISCORD_TOKEN=... python -O -m kzkitty
+KZKITTY_DB=kzkitty.db KZKITTY_DISCORD_TOKEN=... python -m kzkitty
 ```
 
 Optionally set the `KZKITTY_INITIAL_PLAYERS` environment variable to point to
