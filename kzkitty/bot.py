@@ -1,8 +1,9 @@
 import os
 from typing import Any
 
-from arc import (AutocompleteData, GatewayClient, GatewayContext, IntParams,
-                 MemberParams, Option, StrParams, slash_command)
+from arc import (AutocompleteData, AutodeferMode, GatewayClient,
+                 GatewayContext, IntParams, MemberParams, Option, StrParams,
+                 slash_command)
 from hikari import Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
@@ -75,7 +76,8 @@ async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
     raise exc
 
 @client.include
-@slash_command('register', 'Register account')
+@slash_command('register', 'Register account',
+               autodefer=AutodeferMode.EPHEMERAL)
 async def slash_register(ctx: GatewayContext,
                          profile: Option[str, StrParams('Steam profile URL')],
                          mode_name: Option[str | None, ModeParams]=Mode.KZT
@@ -118,7 +120,7 @@ async def slash_mode(ctx: GatewayContext,
                       flags=MessageFlag.EPHEMERAL)
 
 @client.include
-@slash_command('pb', 'Show personal best times')
+@slash_command('pb', 'Show personal best times', autodefer=True)
 async def slash_pb(ctx: GatewayContext,
                    map_name: Option[str, MapParams],
                    type_name: Option[str, TypeParams]=Type.ANY,
@@ -139,7 +141,7 @@ async def slash_pb(ctx: GatewayContext,
     await ctx.respond(component=component)
 
 @client.include
-@slash_command('latest', 'Show most recent personal best')
+@slash_command('latest', 'Show most recent personal best', autodefer=True)
 async def slash_latest(ctx: GatewayContext,
                        type_name: Option[str, TypeParams]=Type.ANY,
                        mode_name: Option[str | None, ModeParams]=None,
@@ -157,7 +159,7 @@ async def slash_latest(ctx: GatewayContext,
     await ctx.respond(component=component)
 
 @client.include
-@slash_command('map', 'Show map info and world record times')
+@slash_command('map', 'Show map info and world record times', autodefer=True)
 async def slash_map(ctx: GatewayContext,
                     map_name: Option[str, MapParams],
                     mode_name: Option[str | None, ModeParams]=None,
@@ -183,7 +185,8 @@ async def slash_map(ctx: GatewayContext,
     await ctx.respond(component=component)
 
 @client.include
-@slash_command('profile', 'Show rank, point total, and point average')
+@slash_command('profile', 'Show rank, point total, and point average',
+               autodefer=True)
 async def slash_profile(ctx: GatewayContext,
                         mode_name: Option[str | None, ModeParams]=None,
                         player_member: Option[Member | None, PlayerParams]=None
