@@ -18,18 +18,18 @@ Available commands:
 To set up a dev environment (with `uv`):
 
 ```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv ~/envs/kzkitty
-source ~/envs/kzkitty/bin/activate
 git clone https://github.com/catsymint/kzkitty.git ~/src/kzkitty
 cd ~/src/kzkitty
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv
+source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
 Then, to run locally:
 
 ```sh
-source ~/envs/kzkitty/bin/activate
+source .venv/bin/activate
 KZKITTY_DB=kzkitty.db KZKITTY_DISCORD_TOKEN=... python -O -m kzkitty
 ```
 
@@ -46,7 +46,7 @@ preferred KZ game modes (on a per-Discord server basis).
 
 ## Deployment
 
-To deploy with Docker Compose, use a `docker-compose.yaml` file:
+To deploy with Docker Compose, use a `compose.yaml` file:
 
 ```yaml
 services:
