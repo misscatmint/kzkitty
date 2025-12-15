@@ -1,7 +1,11 @@
+import csv
+import logging
 import os
 from enum import StrEnum
 
 from tortoise import Model, Tortoise, fields
+
+logger = logging.getLogger('kzkitty.models')
 
 class Type(StrEnum):
     TP = 'TP'
@@ -37,3 +41,24 @@ async def init_db() -> None:
     await Tortoise.generate_schemas()
 
 close_db = Tortoise.close_connections
+
+async def import_default_players() -> None:
+    default_player_file = os.environ.get('KZKITTY_DEFAULT_PLAYERS')
+    if default_player_file is None:
+        return
+
+    users = []
+    with open(default_player_file, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            user_id = int(row['user_id'])
+            server_id = int(row['server_id'])
+            if not await Player.exists(user_id=user_id, server_id=server_id):
+                users.append(Player(user_id=user_id,
+                                    server_id=server_id,
+                                    steamid64=int(row['steamid64']),
+                                    mode=Mode(row['mode'])))
+    await Player.bulk_create(users)
+    if users:
+        logger.info('Imported %d players from %s', len(users),
+                    default_player_file)
