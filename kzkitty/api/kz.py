@@ -458,17 +458,39 @@ async def wrs_for_map(api_map: APIMap, mode: Mode, stage: int
     return [_record_to_pb(record, api_map) for record in records if record]
 
 async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
-    records = await _records_for_steamid64(steamid64, mode,
-                                           teleport_type=Type.TP, stage=0)
-    records += await _records_for_steamid64(steamid64, mode,
-                                            teleport_type=Type.PRO, stage=0)
-    if not records:
+    api_mode_id = {Mode.KZT: 200, Mode.SKZ: 201, Mode.VNL: 202}[mode]
+    url = ('https://kztimerglobal.com/api/v2.0/player_ranks?'
+           f'steamid64s={steamid64}&stages=0&mode_ids={api_mode_id}&'
+           'tickrates=128')
+    try:
+        async with ClientSession() as session:
+            async with session.get(url) as r:
+                if r.status != 200:
+                    raise APIError("Couldn't get global API PBs (HTTP %d)" %
+                                   r.status)
+                results = await r.json()
+    except ClientError as e:
+        raise APIError("Couldn't get global API PBs") from e
+    if not isinstance(results, list):
+        raise APIError('Malformed global API ranks (not a list)')
+    if results and not isinstance(results[0], dict):
+        raise APIError('Malformed global API ranks (not a list of dicts)')
+    if not results:
         try:
             player_name = await name_for_steamid64(steamid64)
         except SteamError:
             player_name = None
         return Profile(player_name=player_name, mode=mode, rank=Rank.NEW,
                        points=0, average=0)
+
+    info = results[0]
+    points = info.get('points')
+    if not isinstance(points, int):
+        raise APIError('Malformed global API ranks (points not an int)')
+
+    average = info.get('average')
+    if not isinstance(average, float):
+        raise APIError('Malformed global API ranks (average not a float)')
 
     if mode == Mode.VNL:
         thresholds = [(600000, Rank.LEGEND),
@@ -511,12 +533,9 @@ async def profile_for_steamid64(steamid64, mode: Mode) -> Profile:
                    (1000, Rank.BEGINNER_PLUS),
                    (500, Rank.BEGINNER),
                    (1, Rank.BEGINNER_MINUS)]
-
-    points = sum(r['points'] for r in records)
-    average = points // len(records)
     rank = Rank.NEW
     for threshold, rank in thresholds:
         if points >= threshold:
             break
-    return Profile(player_name=records[0].get('player_name'), mode=mode,
-                   rank=rank, points=points, average=average)
+    return Profile(player_name=info.get('player_name'), mode=mode,
+                   rank=rank, points=points, average=int(average))
