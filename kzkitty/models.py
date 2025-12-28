@@ -18,6 +18,7 @@ class Mode(StrEnum):
     VNL = 'VNL'
 
 class Map(Model):
+    map_id = fields.IntField()
     name = fields.CharField(max_length=255, primary_key=True)
     tier = fields.IntField()
     vnl_tier = fields.IntField(null=True)

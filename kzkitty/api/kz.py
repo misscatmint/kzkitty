@@ -77,7 +77,7 @@ class Profile:
     points: int
     average: int
 
-async def _vnl_tiers() -> dict[str, tuple[int, int]]:
+async def _vnl_tiers() -> dict[int, tuple[int, int]]:
     url = 'https://vnl.kz/api/maps'
     try:
         async with ClientSession() as session:
@@ -97,9 +97,9 @@ async def _vnl_tiers() -> dict[str, tuple[int, int]]:
 
     maps = {}
     for map_info in json:
-        name = map_info.get('name')
-        if not isinstance(name, str):
-            logger.error('Malformed vnl.kz API maps response (name not a str)')
+        map_id = map_info.get('id')
+        if not isinstance(map_id, int):
+            logger.error('Malformed vnl.kz API maps response (id not an int)')
             continue
         tp_tier = map_info.get('tpTier')
         pro_tier = map_info.get('proTier')
@@ -107,7 +107,7 @@ async def _vnl_tiers() -> dict[str, tuple[int, int]]:
             logger.error('Malformed vnl.kz API maps response'
                          ' (tp/pro tiers not ints)')
             continue
-        maps[name] = (tp_tier, pro_tier)
+        maps[map_id] = (tp_tier, pro_tier)
     return maps
 
 async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
@@ -151,8 +151,7 @@ async def _thumbnail_for_map(name: str) -> bytes | None:
 
 async def refresh_db_maps() -> None:
     logger.info('Downloading map tiers')
-    url = ('https://kztimerglobal.com/api/v2.0'
-           '/maps?is_validated=true&limit=9999')
+    url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -174,7 +173,12 @@ async def refresh_db_maps() -> None:
 
     new = 0
     updated = 0
+    deleted = 0
     for map_info in json:
+        map_id = map_info.get('id')
+        if not isinstance(map_id, int):
+            logger.error('Malformed global API maps response (id not an int)')
+            continue
         name = map_info.get('name')
         if not isinstance(name, str):
             logger.error('Malformed global API maps response (name not a str)')
@@ -184,13 +188,29 @@ async def refresh_db_maps() -> None:
             logger.error('Malformed global API maps response'
                          ' (tier not an int)')
             continue
-        vnl_tier, vnl_pro_tier = vnl_tiers.get(name, (10, 10))
+        validated = map_info.get('validated')
+        if not isinstance(validated, bool):
+            logger.error('Malformed global API maps response'
+                         ' (validated not a bool)')
+            continue
+
+        if not validated:
+            try:
+                db_map = await Map.get(map_id=map_id)
+            except DoesNotExist:
+                pass
+            else:
+                await db_map.delete()
+                deleted += 1
+            continue
+
+        vnl_tier, vnl_pro_tier = vnl_tiers.get(map_id, (10, 10))
         try:
-            db_map = await Map.get(name=name)
+            db_map = await Map.get(map_id=map_id)
         except DoesNotExist:
             logger.info('Downloading thumbnail for map %s', name)
             thumbnail = await _thumbnail_for_map(name)
-            await Map(name=name, tier=tier, vnl_tier=vnl_tier,
+            await Map(map_id=map_id, name=name, tier=tier, vnl_tier=vnl_tier,
                       vnl_pro_tier=vnl_pro_tier, thumbnail=thumbnail).save()
             new += 1
         else:
@@ -218,7 +238,8 @@ async def refresh_db_maps() -> None:
             if changed:
                 await db_map.save()
                 updated += 1
-    logger.info('Refreshed map database (%d new, %d updated)', new, updated)
+    logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
+                new, updated, deleted)
 
 async def map_for_name(name: str, mode: Mode) -> APIMap:
     if not re.fullmatch('[A-za-z0-9_]+', name):
