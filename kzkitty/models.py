@@ -1,6 +1,7 @@
 import csv
 import logging
 import os
+import sys
 from enum import StrEnum
 
 from tortoise import Model, Tortoise, fields
@@ -63,3 +64,30 @@ async def import_default_players() -> None:
     if users:
         logger.info('Imported %d players from %s', len(users),
                     default_player_file)
+
+async def export_default_players() -> None:
+    default_player_file = os.environ['KZKITTY_DEFAULT_PLAYERS']
+    with open(default_player_file, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        if reader.fieldnames is None:
+            raise ValueError('Default players CSV missing header')
+        writer = csv.DictWriter(sys.stdout, fieldnames=reader.fieldnames,
+                                lineterminator=os.linesep)
+        writer.writeheader()
+        for row in reader:
+            user_id = int(row['user_id'])
+            server_id = int(row['server_id'])
+            p = await Player.get(user_id=user_id, server_id=server_id)
+            row['steamid64'] = p.steamid64
+            row['mode'] = p.mode
+            writer.writerow(row)
+
+async def dump_players() -> None:
+    fields = ['user_id', 'server_id', 'steamid64', 'mode']
+    writer = csv.DictWriter(sys.stdout, fieldnames=fields,
+                            lineterminator=os.linesep)
+    writer.writeheader()
+    for p in await Player.all():
+        row = {'user_id': p.user_id, 'server_id': p.server_id,
+               'steamid64': p.steamid64, 'mode': p.mode}
+        writer.writerow(row)
