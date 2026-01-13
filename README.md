@@ -18,7 +18,7 @@ Available commands:
 To set up a dev environment (with `uv`):
 
 ```sh
-git clone https://github.com/catsymint/kzkitty.git ~/src/kzkitty
+git clone https://github.com/misscatmint/kzkitty.git ~/src/kzkitty
 cd ~/src/kzkitty
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv
