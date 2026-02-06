@@ -1,6 +1,6 @@
 # kzkitty
 
-Discord bot for the CS:GO KZ global API.
+Discord bot for the CS:GO KZ and CS2 global APIs.
 
 Available commands:
 

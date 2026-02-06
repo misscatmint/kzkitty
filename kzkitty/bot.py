@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any
 
@@ -7,10 +8,9 @@ from arc import (AutocompleteData, AutodeferMode, GatewayClient,
 from hikari import Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
-from kzkitty.api.kz import (APIError, APIMapError, APIMapAmbiguousError,
-                            latest_pb_for_steamid64,
-                            map_for_name, pb_for_steamid64,
-                            profile_for_steamid64, wrs_for_map)
+from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
+                            APIMapError, APIMapNotFoundError,
+                            APIMapAmbiguousError, api_for_mode)
 from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
 from kzkitty.components import map_component, pb_component, profile_component
@@ -19,6 +19,7 @@ from kzkitty.models import Map, Mode, Player, Type
 
 bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
 client = GatewayClient(bot)
+logger = logging.getLogger('kzkitty.bot')
 
 async def autocomplete_map(data: AutocompleteData[GatewayClient, str]
                            ) -> list[str]:
@@ -27,17 +28,23 @@ async def autocomplete_map(data: AutocompleteData[GatewayClient, str]
     name = data.focused_value.lower()
     if len(name) < 3 or name in {'kz_', 'bkz', 'bkz_'}:
         return []
-    maps = await Map.filter(name__contains=name).order_by('name').limit(25)
-    return [m.name for m in maps]
+    maps = (await Map.filter(name__contains=name)
+                     .order_by('name')
+                     .limit(25)
+                     .distinct()
+                     .values('name'))
+    return [m['name'] for m in maps]
 
 MapParams = StrParams('Map name', name='map',
                       autocomplete_with=autocomplete_map)
 ModeParams = StrParams('Game mode', name='mode',
-                       choices=[Mode.KZT, Mode.SKZ, Mode.VNL])
+                       choices=[Mode.KZT, Mode.SKZ, Mode.VNL, Mode.CKZ,
+                                Mode.VNL2])
 PlayerParams = MemberParams('Player', name='player')
 TypeParams = StrParams('Pro or teleport run', name='type',
                        choices=[Type.PRO, Type.TP, Type.ANY])
-StageParams = IntParams('Bonus stage', name='bonus', min=1)
+CourseParams = StrParams('Course')
+BonusParams = IntParams('Bonus', min=1)
 
 class PlayerNotFound(Exception):
     pass
@@ -49,6 +56,34 @@ async def _get_player(ctx: GatewayContext, player_member: Member | None=None
                                 server_id=ctx.guild_id)
     except DoesNotExist:
         raise PlayerNotFound
+
+async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
+                   course: str | None=None, bonus: int | None=None
+                   ) -> tuple[API, APIMap]:
+    api = api_for_mode(mode)
+    try:
+        api_map = await api.get_map(map_name, course, bonus)
+    except (APIConnectionError, APIMapNotFoundError) as e:
+        if mode_name is not None:
+            raise
+        elif mode in {Mode.KZT, Mode.SKZ, Mode.VNL}:
+            mode = Mode.CKZ
+        else:
+            mode = Mode.KZT
+        if isinstance(e, APIConnectionError):
+            logger.exception('API connection failure during map lookup')
+        api = api_for_mode(mode)
+        api_map = await api.get_map(map_name, course, bonus)
+    else:
+        # If the player has their mode set to VNL and they do /map on
+        # a VNL-impossible map, show KZT/CKZ times if they didn't explicitly
+        # ask for VNL times.
+        if (bonus is None and mode_name is None and
+            mode in {Mode.VNL, Mode.VNL2} and api_map.tier == 10):
+            mode = Mode.KZT if mode == Mode.VNL else Mode.CKZ
+            api = api_for_mode(mode)
+            api_map = await api.get_map(map_name, course, bonus)
+    return api, api_map
 
 @client.set_error_handler
 async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
@@ -65,7 +100,7 @@ async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
                               flags=MessageFlag.EPHEMERAL)
         return
     elif isinstance(exc, APIMapError):
-        await ctx.respond('Map not found', flags=MessageFlag.EPHEMERAL)
+        await ctx.respond(str(exc), flags=MessageFlag.EPHEMERAL)
         return
     elif isinstance(exc, SteamError):
         await ctx.respond("Couldn't access Steam API",
@@ -125,18 +160,17 @@ async def slash_pb(ctx: GatewayContext,
                    map_name: Option[str, MapParams],
                    type_name: Option[str, TypeParams]=Type.ANY,
                    mode_name: Option[str | None, ModeParams]=None,
-                   stage: Option[int, StageParams]=0,
+                   course: Option[str | None, CourseParams]=None,
+                   bonus: Option[int | None, BonusParams]=None,
                    player_member: Option[Member | None, PlayerParams]=None
                    ) -> None:
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    api_map = await map_for_name(map_name, mode)
-    pb = await pb_for_steamid64(player.steamid64, api_map, mode,
-                                Type(type_name), stage)
+    api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
+    pb = await api.get_pb(player.steamid64, api_map, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
-
     component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
@@ -149,8 +183,8 @@ async def slash_latest(ctx: GatewayContext,
                        ) -> None:
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    pb = await latest_pb_for_steamid64(player.steamid64, mode,
-                                       Type(type_name))
+    api = api_for_mode(mode)
+    pb = await api.get_latest(player.steamid64, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
@@ -163,7 +197,8 @@ async def slash_latest(ctx: GatewayContext,
 async def slash_map(ctx: GatewayContext,
                     map_name: Option[str, MapParams],
                     mode_name: Option[str | None, ModeParams]=None,
-                    stage: Option[int, StageParams]=0) -> None:
+                    course: Option[str | None, CourseParams]=None,
+                    bonus: Option[int | None, BonusParams]=None) -> None:
     if mode_name is not None:
         mode = Mode(mode_name)
     else:
@@ -173,15 +208,10 @@ async def slash_map(ctx: GatewayContext,
             mode = Mode.KZT
         else:
             mode = player.mode
-    api_map = await map_for_name(map_name, mode)
-    # If the player has their mode set to VNL and they do /map on
-    # a VNL-impossible map, show KZT times if they didn't explicitly ask for
-    # VNL times.
-    if (stage == 0 and mode_name is None and mode == Mode.VNL and
-        api_map.vnl_tier == 10):
-        mode = Mode.KZT
-    wrs = await wrs_for_map(api_map, mode, stage)
-    component = await map_component(api_map, mode, stage, wrs)
+
+    api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
+    wrs = await api.get_wrs(api_map)
+    component = await map_component(api_map, wrs, api.has_tp_wrs())
     await ctx.respond(component=component)
 
 @client.include
@@ -193,6 +223,7 @@ async def slash_profile(ctx: GatewayContext,
                         ) -> None:
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    profile = await profile_for_steamid64(player.steamid64, mode)
+    api = api_for_mode(mode)
+    profile = await api.get_profile(player.steamid64)
     component = await profile_component(profile, player, ctx.user)
     await ctx.respond(component=component)
