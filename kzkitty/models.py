@@ -17,13 +17,18 @@ class Mode(StrEnum):
     KZT = 'KZT'
     SKZ = 'SKZ'
     VNL = 'VNL'
+    CKZ = 'CKZ'
+    VNL2 = 'VNL (CS2)'
 
 class Map(Model):
+    name = fields.CharField(max_length=255)
     map_id = fields.IntField()
-    name = fields.CharField(max_length=255, primary_key=True)
-    tier = fields.IntField()
+    is_cs2 = fields.BooleanField()
+    tier = fields.IntField(null=True)
+    pro_tier = fields.IntField(null=True)
     vnl_tier = fields.IntField(null=True)
     vnl_pro_tier = fields.IntField(null=True)
+    main_course = fields.CharField(null=True, max_length=255)
     thumbnail = fields.BinaryField(null=True)
 
 class Player(Model):

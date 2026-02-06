@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from hikari import Color, User
@@ -7,13 +8,16 @@ from hikari.impl import (ContainerComponentBuilder,
 
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, avatar_for_steamid64
-from kzkitty.models import Mode, Player
+from kzkitty.models import Player
+
+logger = logging.getLogger('kzkitty.components')
 
 async def _player_container(player: Player, accent_color: Color, body: str):
     container = ContainerComponentBuilder(accent_color=accent_color)
     try:
         avatar = await avatar_for_steamid64(player.steamid64)
     except SteamError:
+        logger.exception("Couldn't get player avatar")
         avatar = None
     if avatar is not None:
         thumbnail = ThumbnailComponentBuilder(media=avatar)
@@ -23,31 +27,6 @@ async def _player_container(player: Player, accent_color: Color, body: str):
     else:
         container.add_text_display(body)
     return container
-
-def _map_url(api_map: APIMap, mode: Mode, stage: int) -> str:
-    if stage != 0:
-        return (f'https://kzgo.eu/maps/{api_map.name}?{mode.lower()}'
-                f'&bonus={stage}')
-    elif mode == Mode.VNL:
-        return f'https://vnl.kz/#/map/{api_map.name}'
-    else:
-        return f'https://kzgo.eu/maps/{api_map.name}?{mode.lower()}'
-
-def _profile_url(steamid64: int, mode: Mode) -> str:
-    if mode == Mode.VNL:
-        return f'https://vnl.kz/#/stats/{steamid64}'
-    else:
-        return f'https://kzgo.eu/players/{steamid64}?{mode.lower()}'
-
-def _tier_name(tier: int, mode: Mode) -> str:
-    if mode == Mode.VNL:
-        names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Advanced',
-                 5: 'Hard', 6: 'Very Hard', 7: 'Extreme', 8: 'Death',
-                 9: 'Unfeasible', 10: 'Impossible'}
-    else:
-        names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard',
-                 5: 'Very Hard', 6: 'Extreme', 7: 'Death'}
-    return names.get(tier, 'Unknown')
 
 def _formattime(td: timedelta) -> str:
     mm, ss = divmod(td.seconds, 60)
@@ -67,22 +46,47 @@ def _formattime(td: timedelta) -> str:
         s = s.rstrip('0').rstrip('.')
     return s
 
+def _map_color(api_map: APIMap) -> int:
+    if api_map.bonus is not None:
+        return 0xcccccc
+    elif api_map.max_tier == 7:
+        return {1: 0x049c49, 2: 0x007053, 3: 0xf39c12, 4: 0xfd7e14,
+                5: 0xe74c3c, 6: 0xc52412, 7: 0xd22ce5}.get(api_map.tier or 0,
+                                                           0xcccccc)
+    else:
+        return {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
+                5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
+                9: 0x555555, 10: 0x000000}.get(api_map.tier or 0, 0xcccccc)
+
+def _map_info(api_map: APIMap, pro=None) -> str:
+    if api_map.bonus is not None:
+        extra = f"""**Bonus**: {api_map.bonus}
+"""
+    elif api_map.course is not None:
+        extra = f"""**Course**: {api_map.course}
+"""
+    else:
+        extra = ''
+    extra += f"**Mode**: {api_map.mode}{' (PRO)' if pro else ''}"
+    if (pro is None and api_map.tier is not None and
+        api_map.pro_tier is not None and api_map.tier != api_map.pro_tier):
+        extra += f"""
+**Tier** (TP): {api_map.tier} - {api_map.tier_name}
+**Tier** (PRO): {api_map.pro_tier} - {api_map.pro_tier_name}"""
+    else:
+        tier = api_map.pro_tier if pro else api_map.tier
+        if tier is not None:
+            extra += f"""
+**Tier**: {api_map.tier} - {api_map.tier_name}"""
+        elif api_map.bonus is None:
+            extra += """
+**Tier**: (unknown)"""
+    return extra
+
 async def pb_component(pb: PersonalBest, player: Player, user: User
                        ) -> ContainerComponentBuilder:
     player_name = pb.player_name or user.display_name
-    profile_url = _profile_url(player.steamid64, pb.mode)
-    map_url = _map_url(pb.map, pb.mode, pb.stage)
-
-    if pb.stage != 0:
-        extra = f'**Bonus**: {pb.stage}'
-    elif pb.mode == Mode.VNL:
-        tier_num = pb.map.vnl_pro_tier if pb.teleports == 0 else pb.map.vnl_tier
-        if tier_num is not None:
-            extra = f'**Tier**: {tier_num} - {_tier_name(tier_num, pb.mode)}'
-        else:
-            extra = '**Tier**: (unknown)'
-    else:
-        extra = f'**Tier**: {pb.map.tier} - {_tier_name(pb.map.tier, pb.mode)}'
+    map_info = _map_info(pb.map, pb.teleports == 0)
 
     if pb.place is not None:
         medal = {1: ':first_place:', 2: ':second_place:',
@@ -92,27 +96,27 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
         medal = None
         top_100 = False
 
-    if pb.points == 1000:
-        points = f'{pb.points} :trophy:'
-    elif pb.points >= 900:
-        points = f'{pb.points} :fire:'
+    if pb.points == pb.point_scale:
+        points = f'{pb.points:,} :trophy:'
+    elif pb.points >= pb.point_scale - (pb.point_scale / 10):
+        points = f'{pb.points:,} :fire:'
         if medal is None:
             medal = ':fire:'
-    elif pb.points >= 800:
-        points = f'{pb.points} :sparkles:'
+    elif pb.points >= pb.point_scale - (pb.point_scale / 10 * 2):
+        points = f'{pb.points:,} :sparkles:'
         if medal is None:
             medal = ':sparkles:'
     else:
-        points = f'{pb.points}'
+        points = f'{pb.points:,}'
 
     if medal is not None:
         body = f'## {medal} '
     else:
         body = '## '
-    body += f"""[{player_name}]({profile_url}) on [{pb.map.name}]({map_url})
-
-**Mode**: {pb.mode}{' (PRO)' if pb.teleports == 0 else ''}
-{extra}
+    body += (f'[{player_name}]({pb.player_url}) on '
+             f'[{pb.map.name}]({pb.map.url})')
+    body += f"""
+{map_info}
 **Time**: {_formattime(pb.time)}{f' (#{pb.place})' if top_100 else ''}
 """
     if pb.teleports:
@@ -135,8 +139,7 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
 
 async def profile_component(profile: Profile, player: Player, user: User
                             ) -> ContainerComponentBuilder:
-    player_name = profile.player_name or user.display_name
-    profile_url = _profile_url(player.steamid64, profile.mode)
+    name = profile.name or user.display_name
     colors = {Rank.BEGINNER_MINUS: 0xffffff,
               Rank.BEGINNER: 0xffffff,
               Rank.BEGINNER_PLUS: 0xffffff,
@@ -160,69 +163,59 @@ async def profile_component(profile: Profile, player: Player, user: User
               Rank.MASTER: 0xff4040,
               Rank.LEGEND: 0xffd700}
     accent_color = Color(colors.get(profile.rank, 0xcccccc))
-    body = f"""## [{player_name}]({profile_url})
+    body = f"""## [{name}]({profile.url})
 
 **Mode**: {profile.mode}
 **Rank**: {profile.rank}
 **Points**: {profile.points:,}
-**Average**: {profile.average}
+"""
+    if profile.average is not None:
+        body += f"""**Average**: {profile.average}
 """
     return await _player_container(player, accent_color, body)
 
-async def map_component(api_map: APIMap, mode: Mode, stage: int,
-                        wrs: list[PersonalBest]) -> ContainerComponentBuilder:
-    map_url = _map_url(api_map, mode, stage)
-    if stage != 0:
-        extra = f'**Bonus**: {stage}'
-        color = 0xcccccc
-    elif mode == Mode.VNL:
-        if api_map.vnl_tier is not None and api_map.vnl_pro_tier is not None:
-            tier_name = _tier_name(api_map.vnl_tier, mode)
-            if api_map.vnl_tier != api_map.vnl_pro_tier:
-                pro_tier_name = _tier_name(api_map.vnl_pro_tier, mode)
-                extra = f"""**Tier** (TP): {api_map.vnl_tier} - {tier_name}
-**Tier** (PRO): {api_map.vnl_pro_tier} - {pro_tier_name}"""
+def _wr_time(pb: PersonalBest) -> str:
+    player_name = pb.player_name or '(unknown)'
+    return f'{_formattime(pb.time)} by [{player_name}]({pb.player_url})'
+
+async def map_component(api_map: APIMap, wrs: list[PersonalBest],
+                        has_tp_wrs: bool) -> ContainerComponentBuilder:
+    map_info = _map_info(api_map)
+    body = f"""## [{api_map.name}]({api_map.url})
+
+{map_info}
+"""
+    if has_tp_wrs:
+        tp_pb = pro_pb = None
+        tp_pb_time = pro_pb_time = '(none)'
+        for pb in wrs:
+            if pb.teleports == 0:
+                pro_pb = pb
             else:
-                extra = f'**Tier**: {api_map.vnl_tier} - {tier_name}'
-        else:
-            extra = '**Tier**: (unknown)'
-        color = {1: 0x049c49, 2: 0x007053, 3: 0xb6b007, 4: 0xf39c12,
-                 5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
-                 9: 0x555555, 10: 0x000000}.get(api_map.vnl_tier or 0,
-                                                0xcccccc)
-    else:
-        tier_name = _tier_name(api_map.tier, mode)
-        extra = f'**Tier**: {api_map.tier} - {tier_name}'
-        color = {1: 0x049c49, 2: 0x007053, 3: 0xf39c12, 4: 0xfd7e14,
-                 5: 0xe74c3c, 6: 0xc52412, 7: 0xd22ce5}.get(api_map.tier,
-                                                            0xcccccc)
-
-    tp_pb = pro_pb = None
-    tp_pb_time = pro_pb_time = '(none)'
-    for pb in wrs:
-        if pb.teleports == 0:
-            pro_pb = pb
-        else:
-            tp_pb = pb
-    if tp_pb is not None:
-        tp_player_name = tp_pb.player_name or '(unknown)'
-        tp_profile_url = _profile_url(tp_pb.steamid64, mode)
-        tp_pb_time = (f'{_formattime(tp_pb.time)} '
-                      f'by [{tp_player_name}]({tp_profile_url})')
-    if pro_pb is not None:
-        pro_player_name = pro_pb.player_name or '(unknown)'
-        pro_profile_url = _profile_url(pro_pb.steamid64, mode)
-        pro_pb_time = (f'{_formattime(pro_pb.time)} '
-                       f'by [{pro_player_name}]({pro_profile_url})')
-
-    body = f"""## [{api_map.name}]({map_url})
-
-**Mode**: {mode}
-{extra}
-**WR** (TP): {tp_pb_time}
+                tp_pb = pb
+        if tp_pb is not None:
+            tp_pb_time = _wr_time(tp_pb)
+        if pro_pb is not None:
+            pro_pb_time = _wr_time(pro_pb)
+        body += f"""**WR** (TP): {tp_pb_time}
 **WR** (PRO): {pro_pb_time}
 """
-    accent_color = Color(color)
+    elif wrs:
+        wrs.sort(key=lambda pb: pb.time)
+        pb = wrs[0]
+        overall_type = 'PRO' if pb.teleports == 0 else 'TP'
+        body += f"""**WR** ({overall_type}): {_wr_time(pb)}
+"""
+        pro_pbs = [pb for pb in wrs if pb.teleports == 0]
+        if pro_pbs and pb not in pro_pbs:
+            pro_pb = pro_pbs[0]
+            body += f"""**WR** (PRO): {_wr_time(pro_pb)}
+"""
+    else:
+        body += """**WR**: (none)
+"""
+
+    accent_color = Color(_map_color(api_map))
     container = ContainerComponentBuilder(accent_color=accent_color)
     container.add_text_display(body)
     if api_map.thumbnail is not None:
