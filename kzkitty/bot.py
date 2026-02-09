@@ -1,25 +1,39 @@
+import asyncio
 import logging
 import os
 from typing import Any
 
+from aiocron import crontab
 from arc import (AutocompleteData, AutodeferMode, GatewayClient,
                  GatewayContext, IntParams, MemberParams, Option, StrParams,
                  slash_command)
-from hikari import Intents, Member, MessageFlag
+from hikari import GatewayBot, Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
-                            APIMapAmbiguousError, api_for_mode)
+                            APIMapAmbiguousError, api_for_mode,
+                            refresh_db_maps)
 from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
 from kzkitty.components import map_component, pb_component, profile_component
-from kzkitty.gateway import GatewayBot
-from kzkitty.models import Map, Mode, Player, Type
+from kzkitty.models import (Map, Mode, Player, Type, close_db,
+                            import_default_players, init_db)
 
 bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
 client = GatewayClient(bot)
 logger = logging.getLogger('kzkitty.bot')
+
+@client.add_startup_hook
+async def startup_hook(_: GatewayClient) -> None:
+    await init_db()
+    asyncio.create_task(import_default_players())
+    asyncio.create_task(refresh_db_maps())
+    crontab('0 0 * * *', func=refresh_db_maps)
+
+@client.add_shutdown_hook
+async def shutdown_hook(_: GatewayClient) -> None:
+    await close_db()
 
 async def autocomplete_map(data: AutocompleteData[GatewayClient, str]
                            ) -> list[str]:
