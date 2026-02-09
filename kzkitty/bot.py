@@ -3,10 +3,10 @@ import logging
 import os
 from typing import Any
 
-from aiocron import crontab
 from arc import (AutocompleteData, AutodeferMode, GatewayClient,
                  GatewayContext, IntParams, MemberParams, Option, StrParams,
                  slash_command)
+from arc.utils import IntervalLoop
 from hikari import GatewayBot, Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
 
@@ -23,13 +23,13 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
 client = GatewayClient(bot)
 logger = logging.getLogger('kzkitty.bot')
+refresh_db_loop = IntervalLoop(refresh_db_maps, hours=1, run_on_start=True)
 
 @client.add_startup_hook
 async def startup_hook(_: GatewayClient) -> None:
     await init_db()
     asyncio.create_task(import_default_players())
-    asyncio.create_task(refresh_db_maps())
-    crontab('0 0 * * *', func=refresh_db_maps)
+    refresh_db_loop.start()
 
 @client.add_shutdown_hook
 async def shutdown_hook(_: GatewayClient) -> None:
