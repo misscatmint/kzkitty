@@ -23,7 +23,7 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
 client = GatewayClient(bot)
 logger = logging.getLogger('kzkitty.bot')
-refresh_db_loop = IntervalLoop(refresh_db_maps, hours=1, run_on_start=True)
+refresh_db_loop = IntervalLoop(refresh_db_maps, hours=24, run_on_start=True)
 
 @client.add_startup_hook
 async def startup_hook(_: GatewayClient) -> None:
