@@ -1,3 +1,2 @@
 - Convert from gateway to REST and run on CloudFlare Workers/D1
 - Make Discord add-on public for all servers to add
-- Add CS2KZ support
