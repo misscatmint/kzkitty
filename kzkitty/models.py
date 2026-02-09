@@ -44,6 +44,7 @@ async def init_db() -> None:
     await Tortoise.init(
         db_url=f"sqlite://{os.environ['KZKITTY_DB']}",
         modules={'models': ['kzkitty.models']},
+        _enable_global_fallback=True
     )
     await Tortoise.generate_schemas()
 
