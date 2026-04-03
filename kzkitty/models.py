@@ -52,7 +52,7 @@ async def import_default_players() -> None:
     if default_player_file is None:
         return
 
-    users = []
+    users: list[Player] = []
     with open(default_player_file, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
