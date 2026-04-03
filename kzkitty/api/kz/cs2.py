@@ -13,7 +13,7 @@ from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
 from kzkitty.api.steam import SteamError, name_for_steamid64
 from kzkitty.models import Map, Mode, Type
 
-logger = logging.getLogger('kzkitty.api.kz.cs2')
+_logger = logging.getLogger('kzkitty.api.kz.cs2')
 
 async def _thumbnail_for_map(name: str, course_id: int=1) -> bytes | None:
     thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
@@ -26,10 +26,10 @@ async def _thumbnail_for_map(name: str, course_id: int=1) -> bytes | None:
                 if r.status == 200:
                     thumbnail = await r.content.read()
                 else:
-                    logger.error("Couldn't get map thumbnail (HTTP %d)",
-                                 r.status)
+                    _logger.error("Couldn't get map thumbnail (HTTP %d)",
+                                  r.status)
     except ClientError:
-        logger.exception("Couldn't get map thumbnail")
+        _logger.exception("Couldn't get map thumbnail")
     return thumbnail
 
 def _tier_num(name: str) -> int | None:
@@ -43,26 +43,26 @@ def _tier_name(tier: int | None) -> str:
             9: 'Unfeasible', 10: 'Impossible'}.get(tier or -1, 'Unknown')
 
 async def refresh_cs2_db_maps() -> None:
-    logger.info('Downloading CS2 map tiers')
+    _logger.info('Downloading CS2 map tiers')
     url = 'https://api.cs2kz.org/maps'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get global API maps (HTTP %d)",
-                                 r.status)
+                    _logger.error("Couldn't get global API maps (HTTP %d)",
+                                  r.status)
                     return
                 results = await r.json()
     except ClientError:
-        logger.exception("Couldn't get global API maps")
+        _logger.exception("Couldn't get global API maps")
         return
 
     if not isinstance(results, dict):
-        logger.error('Malformed global API maps response (not a dict)')
+        _logger.error('Malformed global API maps response (not a dict)')
         return
     maps = results.get('values')
     if not isinstance(maps, list):
-        logger.error('Malformed global API maps response (maps not a list)')
+        _logger.error('Malformed global API maps response (maps not a list)')
         return
 
     new = 0
@@ -71,12 +71,12 @@ async def refresh_cs2_db_maps() -> None:
     for map_info in maps:
         map_id = map_info.get('id')
         if not isinstance(map_id, int):
-            logger.error('Malformed global API maps response (id not an int)')
+            _logger.error('Malformed global API maps response (id not an int)')
             continue
         state = map_info.get('state')
         if not isinstance(state, str):
-            logger.error('Malformed global API maps response'
-                         ' (state not a str)')
+            _logger.error('Malformed global API maps response'
+                          ' (state not a str)')
             continue
 
         if state != 'approved':
@@ -91,19 +91,19 @@ async def refresh_cs2_db_maps() -> None:
 
         name = map_info.get('name')
         if not isinstance(name, str):
-            logger.error('Malformed global API maps response (name not a str)')
+            _logger.error('Malformed global API maps response (name not a str)')
             continue
         courses = map_info.get('courses')
         if not isinstance(courses, list):
-            logger.error('Malformed global API maps response'
-                         ' (courses not a list)')
+            _logger.error('Malformed global API maps response'
+                          ' (courses not a list)')
             continue
         tier = pro_tier = vnl_tier = vnl_pro_tier = course_name = None
         if courses:
             course_info = courses[0]
             if not isinstance(course_info, dict):
-                logger.error('Malformed global API maps response'
-                             ' (course info not a dict)')
+                _logger.error('Malformed global API maps response'
+                              ' (course info not a dict)')
                 continue
             course_name = course_info.get('name')
             if not isinstance(course_name, str):
@@ -111,38 +111,38 @@ async def refresh_cs2_db_maps() -> None:
                                ' (course name not a str)')
             filters = course_info.get('filters')
             if not isinstance(filters, dict):
-                logger.error('Malformed global API maps response'
-                             ' (filters not a dict)')
+                _logger.error('Malformed global API maps response'
+                              ' (filters not a dict)')
                 continue
             classic_filter = filters.get('classic')
             if (not isinstance(classic_filter, dict) and
                 classic_filter is not None):
-                logger.error('Malformed global API maps response'
-                             ' (filters not a dict)')
+                _logger.error('Malformed global API maps response'
+                              ' (filters not a dict)')
                 continue
             if classic_filter is not None:
                 tier_code = classic_filter.get('nub_tier')
                 pro_tier_code = classic_filter.get('pro_tier')
                 if (not isinstance(tier_code, str) or
                     not isinstance(pro_tier_code, str)):
-                    logger.error('Malformed global API maps response'
-                                 ' (classic tier not a str)')
+                    _logger.error('Malformed global API maps response'
+                                  ' (classic tier not a str)')
                     continue
                 tier = _tier_num(tier_code) or 10
                 pro_tier = _tier_num(pro_tier_code) or 10
             vanilla_filter = filters.get('vanilla')
             if (not isinstance(vanilla_filter, dict) and
                 vanilla_filter is not None):
-                logger.error('Malformed global API maps response'
-                             ' (filters not a dict)')
+                _logger.error('Malformed global API maps response'
+                              ' (filters not a dict)')
                 continue
             if vanilla_filter is not None:
                 vnl_tier_code = vanilla_filter.get('nub_tier')
                 vnl_pro_tier_code = vanilla_filter.get('pro_tier')
                 if (not isinstance(vnl_tier_code, str) or
                     not isinstance(vnl_pro_tier_code, str)):
-                    logger.error('Malformed global API maps response'
-                                 ' (vanilla tier not a str)')
+                    _logger.error('Malformed global API maps response'
+                                  ' (vanilla tier not a str)')
                     continue
                 vnl_tier = _tier_num(vnl_tier_code) or 10
                 vnl_pro_tier = _tier_num(vnl_pro_tier_code) or 10
@@ -150,7 +150,7 @@ async def refresh_cs2_db_maps() -> None:
         try:
             db_map = await Map.get(map_id=map_id, is_cs2=True)
         except DoesNotExist:
-            logger.info('Downloading thumbnail for map %s', name)
+            _logger.info('Downloading thumbnail for map %s', name)
             thumbnail = await _thumbnail_for_map(name)
             await Map(map_id=map_id, is_cs2=True, name=name, tier=tier,
                       pro_tier=pro_tier, vnl_tier=vnl_tier,
@@ -163,35 +163,35 @@ async def refresh_cs2_db_maps() -> None:
                 thumbnail = await _thumbnail_for_map(name)
             changed = False
             if db_map.main_course != course_name and course_name is not None:
-                logger.info('Updating main_course for map %s', name)
+                _logger.info('Updating main_course for map %s', name)
                 db_map.main_course = course_name
                 changed = True
             if db_map.tier != tier and tier is not None:
-                logger.info('Updating tier for map %s', name)
+                _logger.info('Updating tier for map %s', name)
                 db_map.tier = tier
                 changed = True
             if db_map.pro_tier != pro_tier and pro_tier is not None:
-                logger.info('Updating pro tier for map %s', name)
+                _logger.info('Updating pro tier for map %s', name)
                 db_map.pro_tier = pro_tier
                 changed = True
             if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                logger.info('Updating VNL tier for map %s', name)
+                _logger.info('Updating VNL tier for map %s', name)
                 db_map.vnl_tier = vnl_tier
                 changed = True
             if (db_map.vnl_pro_tier != vnl_pro_tier and
                 vnl_pro_tier is not None):
-                logger.info('Updating VNL pro tier for map %s', name)
+                _logger.info('Updating VNL pro tier for map %s', name)
                 db_map.vnl_pro_tier = vnl_pro_tier
                 changed = True
             if db_map.thumbnail != thumbnail and thumbnail is not None:
-                logger.info('Updating thumbnail for map %s', name)
+                _logger.info('Updating thumbnail for map %s', name)
                 db_map.thumbnail = thumbnail
                 changed = True
             if changed:
                 await db_map.save()
                 updated += 1
-    logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
-                new, updated, deleted)
+    _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
+                 new, updated, deleted)
 
 def _steamid_to_steamid64(steamid: str) -> int:
     parts = steamid.split(':')
