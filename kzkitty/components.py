@@ -10,14 +10,14 @@ from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, avatar_for_steamid64
 from kzkitty.models import Player
 
-logger = logging.getLogger('kzkitty.components')
+_logger = logging.getLogger('kzkitty.components')
 
 async def _player_container(player: Player, accent_color: Color, body: str):
     container = ContainerComponentBuilder(accent_color=accent_color)
     try:
         avatar = await avatar_for_steamid64(player.steamid64)
     except SteamError:
-        logger.exception("Couldn't get player avatar")
+        _logger.exception("Couldn't get player avatar")
         avatar = None
     if avatar is not None:
         thumbnail = ThumbnailComponentBuilder(media=avatar)

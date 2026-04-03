@@ -13,7 +13,7 @@ from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
 from kzkitty.api.steam import SteamError, name_for_steamid64
 from kzkitty.models import Map, Mode, Type
 
-logger = logging.getLogger('kzkitty.api.kz.csgo')
+_logger = logging.getLogger('kzkitty.api.kz.csgo')
 
 async def _vnl_tiers() -> dict[int, tuple[int, int]] | None:
     url = 'https://vnlkz.com/api/maps'
@@ -21,29 +21,29 @@ async def _vnl_tiers() -> dict[int, tuple[int, int]] | None:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get VNL API maps (HTTP %d)",
-                                 r.status)
+                    _logger.error("Couldn't get VNL API maps (HTTP %d)",
+                                  r.status)
                     return None
                 json = await r.json()
     except ClientError:
-        logger.exception("Couldn't get VNL API maps")
+        _logger.exception("Couldn't get VNL API maps")
         return None
 
     if not isinstance(json, list):
-        logger.error('Malformed VNL API maps response (not a list)')
+        _logger.error('Malformed VNL API maps response (not a list)')
         return None
 
     maps = {}
     for map_info in json:
         map_id = map_info.get('id')
         if not isinstance(map_id, int):
-            logger.error('Malformed VNL API maps response (id not an int)')
+            _logger.error('Malformed VNL API maps response (id not an int)')
             continue
         tp_tier = map_info.get('tpTier')
         pro_tier = map_info.get('proTier')
         if not isinstance(tp_tier, int) or not isinstance(pro_tier, int):
-            logger.error('Malformed VNL API maps response'
-                         ' (tp/pro tiers not ints)')
+            _logger.error('Malformed VNL API maps response'
+                          ' (tp/pro tiers not ints)')
             continue
         maps[map_id] = (tp_tier, pro_tier)
     return maps
@@ -81,32 +81,32 @@ async def _thumbnail_for_map(name: str) -> bytes | None:
                 if r.status == 200:
                     thumbnail = await r.content.read()
                 else:
-                    logger.error("Couldn't get map thumbnail (HTTP %d)",
-                                 r.status)
+                    _logger.error("Couldn't get map thumbnail (HTTP %d)",
+                                  r.status)
     except ClientError:
-        logger.exception("Couldn't get map thumbnail")
+        _logger.exception("Couldn't get map thumbnail")
     return thumbnail
 
 async def refresh_csgo_db_maps() -> None:
-    logger.info('Downloading CSGO map tiers')
+    _logger.info('Downloading CSGO map tiers')
     url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get global API maps (HTTP %d)",
-                                 r.status)
+                    _logger.error("Couldn't get global API maps (HTTP %d)",
+                                  r.status)
                     return
                 json = await r.json()
     except ClientError:
-        logger.exception("Couldn't get global API maps")
+        _logger.exception("Couldn't get global API maps")
         return
 
     if not isinstance(json, list):
-        logger.error('Malformed global API maps response (not a list)')
+        _logger.error('Malformed global API maps response (not a list)')
         return
 
-    logger.info('Downloading CSGO VNL map tiers')
+    _logger.info('Downloading CSGO VNL map tiers')
     vnl_tiers: dict[int, tuple[int, int]] | None = await _vnl_tiers()
 
     new = 0
@@ -115,21 +115,21 @@ async def refresh_csgo_db_maps() -> None:
     for map_info in json:
         map_id = map_info.get('id')
         if not isinstance(map_id, int):
-            logger.error('Malformed global API maps response (id not an int)')
+            _logger.error('Malformed global API maps response (id not an int)')
             continue
         name = map_info.get('name')
         if not isinstance(name, str):
-            logger.error('Malformed global API maps response (name not a str)')
+            _logger.error('Malformed global API maps response (name not a str)')
             continue
         tier = map_info.get('difficulty')
         if not isinstance(tier, int):
-            logger.error('Malformed global API maps response'
-                         ' (tier not an int)')
+            _logger.error('Malformed global API maps response'
+                          ' (tier not an int)')
             continue
         validated = map_info.get('validated')
         if not isinstance(validated, bool):
-            logger.error('Malformed global API maps response'
-                         ' (validated not a bool)')
+            _logger.error('Malformed global API maps response'
+                          ' (validated not a bool)')
             continue
 
         if not validated:
@@ -149,7 +149,7 @@ async def refresh_csgo_db_maps() -> None:
         try:
             db_map = await Map.get(map_id=map_id, is_cs2=False)
         except DoesNotExist:
-            logger.info('Downloading thumbnail for map %s', name)
+            _logger.info('Downloading thumbnail for map %s', name)
             thumbnail = await _thumbnail_for_map(name)
             await Map(map_id=map_id, is_cs2=False, name=name, tier=tier,
                       pro_tier=tier, vnl_tier=vnl_tier,
@@ -161,27 +161,27 @@ async def refresh_csgo_db_maps() -> None:
                 thumbnail = await _thumbnail_for_map(name)
             changed = False
             if db_map.tier != tier:
-                logger.info('Updating tier for map %s', name)
+                _logger.info('Updating tier for map %s', name)
                 db_map.tier = db_map.pro_tier = tier
                 changed = True
             if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                logger.info('Updating VNL tier for map %s', name)
+                _logger.info('Updating VNL tier for map %s', name)
                 db_map.vnl_tier = vnl_tier
                 changed = True
             if (db_map.vnl_pro_tier != vnl_pro_tier and
                 vnl_pro_tier is not None):
-                logger.info('Updating VNL pro tier for map %s', name)
+                _logger.info('Updating VNL pro tier for map %s', name)
                 db_map.vnl_pro_tier = vnl_pro_tier
                 changed = True
             if db_map.thumbnail != thumbnail and thumbnail is not None:
-                logger.info('Updating thumbnail for map %s', name)
+                _logger.info('Updating thumbnail for map %s', name)
                 db_map.thumbnail = thumbnail
                 changed = True
             if changed:
                 await db_map.save()
                 updated += 1
-    logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
-                new, updated, deleted)
+    _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
+                 new, updated, deleted)
 
 def _tier_name(tier: int | None, mode: Mode) -> str:
     if mode == Mode.VNL:
@@ -391,7 +391,7 @@ class CSGOAPI(API):
                     try:
                         tier, pro_tier = await _vnl_tiers_for_map(name)
                     except APIError:
-                        logger.exception("Couldn't get VNL map tiers")
+                        _logger.exception("Couldn't get VNL map tiers")
                         tier = pro_tier = None
                 else:
                     tier = vnl_tier
@@ -428,7 +428,7 @@ class CSGOAPI(API):
         try:
             pb.place = await _place_for_pb(pb)
         except APIError:
-            logger.exception("Couldn't get global API PB place")
+            _logger.exception("Couldn't get global API PB place")
         return pbs[0]
 
     @override
@@ -463,7 +463,7 @@ class CSGOAPI(API):
         try:
             pb.place = await _place_for_pb(pb)
         except APIError:
-            logger.exception("Couldn't get global API PB place")
+            _logger.exception("Couldn't get global API PB place")
         return pb
 
     @override

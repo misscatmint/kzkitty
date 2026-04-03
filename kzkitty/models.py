@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from tortoise import Model, Tortoise, fields
 
-logger = logging.getLogger('kzkitty.models')
+_logger = logging.getLogger('kzkitty.models')
 
 class Type(StrEnum):
     TP = 'TP'
@@ -65,8 +65,8 @@ async def import_default_players() -> None:
                                     mode=Mode(row['mode'])))
     await Player.bulk_create(users)
     if users:
-        logger.info('Imported %d players from %s', len(users),
-                    default_player_file)
+        _logger.info('Imported %d players from %s', len(users),
+                     default_player_file)
 
 async def export_default_players() -> None:
     default_player_file = os.environ['KZKITTY_DEFAULT_PLAYERS']
