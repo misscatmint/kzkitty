@@ -40,12 +40,9 @@ class Player(Model):
     class Meta: # type: ignore
         unique_together = ('user_id', 'server_id')
 
-async def init_db() -> None:
-    await Tortoise.init(
-        db_url=f"sqlite://{os.environ['KZKITTY_DB']}",
-        modules={'models': ['kzkitty.models']},
-        _enable_global_fallback=True
-    )
+async def init_db(db_url: str) -> None:
+    await Tortoise.init(db_url=db_url, modules={'models': ['kzkitty.models']},
+                        _enable_global_fallback=True)
     await Tortoise.generate_schemas()
 
 close_db = Tortoise.close_connections
