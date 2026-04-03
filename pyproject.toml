@@ -1,0 +1,16 @@
+[project]
+name = "kzkitty"
+version = "0.1.0"
+description = "Discord bot for the CS:GO and CS2 KZ global APIs."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp[speedups]>=3.13.5",
+    "hikari-arc>=2.2.0",
+    "hikari[speedups]>=2.5.0",
+    "tortoise-orm>=1.1.7",
+    "uvloop>=0.22.1",
+]
+
+[tool.uv]
+exclude-dependencies = ["aiodns"]

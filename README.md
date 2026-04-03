@@ -21,16 +21,13 @@ To set up a dev environment (with `uv`):
 git clone https://github.com/misscatmint/kzkitty.git ~/src/kzkitty
 cd ~/src/kzkitty
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
+uv sync
 ```
 
 Then, to run locally:
 
 ```sh
-source .venv/bin/activate
-KZKITTY_DB=sqlite://kzkitty.db KZKITTY_DISCORD_TOKEN=... python -m kzkitty
+KZKITTY_DB=sqlite://kzkitty.db KZKITTY_DISCORD_TOKEN=... uv run -m kzkitty
 ```
 
 Optionally set the `KZKITTY_INITIAL_PLAYERS` environment variable to point to

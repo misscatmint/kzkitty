@@ -1,12 +1,8 @@
-FROM python:3.14.3-alpine
-COPY --from=ghcr.io/astral-sh/uv:0.9.13 /uv /uvx /bin/
+FROM ghcr.io/astral-sh/uv:0.11.3-python3.14-alpine3.23
+ENV PYTHONOPTIMIZE=2 UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1 UV_NO_DEV=1
 
 WORKDIR /app
+COPY . /app
+RUN uv sync --locked
 
-ENV UV_SYSTEM_PYTHON=1
-
-COPY requirements.txt .
-RUN uv pip install -r requirements.txt
-
-COPY . .
-CMD ["python", "-OO", "-m", "kzkitty"]
+CMD ["uv", "run", "-m", "kzkitty"]
