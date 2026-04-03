@@ -37,7 +37,7 @@ def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
     client.include(_slash_latest)
     client.include(_slash_map)
     client.include(_slash_profile)
-    
+
     refresh_db_loop = IntervalLoop(refresh_db_maps, hours=refresh_db_hours,
                                    run_on_start=True)
     async def startup(_: GatewayClient) -> None:
