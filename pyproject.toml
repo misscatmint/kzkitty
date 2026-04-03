@@ -12,5 +12,8 @@ dependencies = [
     "uvloop>=0.22.1",
 ]
 
+[tool.basedpyright]
+typeCheckingMode = "standard"
+
 [tool.uv]
 exclude-dependencies = ["aiodns"]
