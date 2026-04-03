@@ -15,59 +15,59 @@ from kzkitty.models import Map, Mode, Type
 logger = logging.getLogger('kzkitty.api.kz.csgo')
 
 async def _vnl_tiers() -> dict[int, tuple[int, int]] | None:
-    url = 'https://vnl.kz/api/maps'
+    url = 'https://vnlkz.com/api/maps'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    logger.error("Couldn't get vnl.kz API maps (HTTP %d)",
+                    logger.error("Couldn't get VNL API maps (HTTP %d)",
                                  r.status)
                     return None
                 json = await r.json()
     except ClientError:
-        logger.exception("Couldn't get vnl.kz API maps")
+        logger.exception("Couldn't get VNL API maps")
         return None
 
     if not isinstance(json, list):
-        logger.error('Malformed vnl.kz API maps response (not a list)')
+        logger.error('Malformed VNL API maps response (not a list)')
         return None
 
     maps = {}
     for map_info in json:
         map_id = map_info.get('id')
         if not isinstance(map_id, int):
-            logger.error('Malformed vnl.kz API maps response (id not an int)')
+            logger.error('Malformed VNL API maps response (id not an int)')
             continue
         tp_tier = map_info.get('tpTier')
         pro_tier = map_info.get('proTier')
         if not isinstance(tp_tier, int) or not isinstance(pro_tier, int):
-            logger.error('Malformed vnl.kz API maps response'
+            logger.error('Malformed VNL API maps response'
                          ' (tp/pro tiers not ints)')
             continue
         maps[map_id] = (tp_tier, pro_tier)
     return maps
 
 async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
-    url = f'https://vnl.kz/api/maps/{name}'
+    url = f'https://vnlkz.com/api/maps/{name}'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status == 404:
                     return 10, 10
                 elif r.status != 200:
-                    raise APIError("Couldn't get vnl.kz map tiers (HTTP %d)" %
+                    raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
                                    r.status)
                 json = await r.json()
     except ClientError as e:
-        raise APIConnectionError("Couldn't get vnl.kz map tiers") from e
+        raise APIConnectionError("Couldn't get VNL map tiers") from e
 
     if not isinstance(json, dict):
-        raise APIError("Malformed vnl.kz JSON (not a dict)")
+        raise APIError("Malformed VNL JSON (not a dict)")
     tp_tier = json.get('tpTier')
     pro_tier = json.get('proTier')
     if (not isinstance(tp_tier, int) or
         not isinstance(pro_tier, int)):
-        raise APIError("Malformed vnl.kz JSON (tpTier/proTier not an int)")
+        raise APIError("Malformed VNL JSON (tpTier/proTier not an int)")
     return tp_tier, pro_tier
 
 async def _thumbnail_for_map(name: str) -> bytes | None:
@@ -194,7 +194,7 @@ def _tier_name(tier: int | None, mode: Mode) -> str:
 
 def _profile_url(steamid64: int, mode: Mode) -> str:
     if mode == Mode.VNL:
-        return f'https://vnl.kz/#/stats/{steamid64}'
+        return f'https://vnlkz.com/#/stats/{steamid64}'
     else:
         return f'https://kzgo.eu/players/{steamid64}?{mode.lower()}'
 
@@ -203,7 +203,7 @@ def _map_url(name: str, mode: Mode, stage: int) -> str:
         return (f'https://kzgo.eu/maps/{name}?{mode.lower()}'
                 f'&bonus={stage}')
     elif mode == Mode.VNL:
-        return f'https://vnl.kz/#/map/{name}'
+        return f'https://vnlkz.com/#/map/{name}'
     else:
         return f'https://kzgo.eu/maps/{name}?{mode.lower()}'
 
@@ -388,7 +388,7 @@ class CSGOAPI(API):
                     try:
                         tier, pro_tier = await _vnl_tiers_for_map(name)
                     except APIError:
-                        logger.exception("Couldn't get vnl.kz map tiers")
+                        logger.exception("Couldn't get VNL map tiers")
                         tier = pro_tier = None
                 else:
                     tier = vnl_tier
