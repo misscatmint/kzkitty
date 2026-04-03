@@ -14,7 +14,7 @@ from kzkitty.models import Map, Mode, Type
 
 logger = logging.getLogger('kzkitty.api.kz.csgo')
 
-async def _vnl_tiers() -> dict[int, tuple[int, int]]:
+async def _vnl_tiers() -> dict[int, tuple[int, int]] | None:
     url = 'https://vnl.kz/api/maps'
     try:
         async with ClientSession() as session:
@@ -22,15 +22,15 @@ async def _vnl_tiers() -> dict[int, tuple[int, int]]:
                 if r.status != 200:
                     logger.error("Couldn't get vnl.kz API maps (HTTP %d)",
                                  r.status)
-                    return {}
+                    return None
                 json = await r.json()
     except ClientError:
         logger.exception("Couldn't get vnl.kz API maps")
-        return {}
+        return None
 
     if not isinstance(json, list):
         logger.error('Malformed vnl.kz API maps response (not a list)')
-        return {}
+        return None
 
     maps = {}
     for map_info in json:
@@ -106,7 +106,7 @@ async def refresh_csgo_db_maps() -> None:
         return
 
     logger.info('Downloading CSGO VNL map tiers')
-    vnl_tiers = await _vnl_tiers()
+    vnl_tiers: dict[int, tuple[int, int]] | None = await _vnl_tiers()
 
     new = 0
     updated = 0
@@ -141,7 +141,10 @@ async def refresh_csgo_db_maps() -> None:
                 deleted += 1
             continue
 
-        vnl_tier, vnl_pro_tier = vnl_tiers.get(map_id, (10, 10))
+        if vnl_tiers is not None:
+            vnl_tier, vnl_pro_tier = vnl_tiers.get(map_id, (10, 10))
+        else:
+            vnl_tier = vnl_pro_tier = None
         try:
             db_map = await Map.get(map_id=map_id, is_cs2=False)
         except DoesNotExist:
