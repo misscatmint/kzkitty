@@ -58,7 +58,7 @@ def _map_color(api_map: APIMap) -> int:
                 5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                 9: 0x555555, 10: 0x000000}.get(api_map.tier or 0, 0xcccccc)
 
-def _map_info(api_map: APIMap, pro=None) -> str:
+def _map_info(api_map: APIMap, pro: bool | None=None) -> str:
     if api_map.bonus is not None:
         extra = f"""**Bonus**: {api_map.bonus}
 """

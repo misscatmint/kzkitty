@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import override
 
 from aiohttp import ClientError, ClientSession
 from tortoise.exceptions import DoesNotExist
@@ -282,9 +283,11 @@ def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
                         point_scale=10000, place=place, date=date)
 
 class CS2API(API):
+    @override
     def has_tp_wrs(self) -> bool:
         return False
 
+    @override
     async def get_map(self, name: str, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
         if not re.fullmatch('[A-za-z0-9_]+', name):
@@ -408,6 +411,7 @@ class CS2API(API):
                       pro_tier=tier, pro_tier_name=pro_tier_name, max_tier=7,
                       thumbnail=thumbnail, url=url)
 
+    @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
         record = await _top_record(self.mode, steamid64=steamid64,
@@ -416,6 +420,7 @@ class CS2API(API):
             return None
         return _record_to_pb(record, api_map)
 
+    @override
     async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
                          ) -> PersonalBest | None:
         record = await _top_record(self.mode, steamid64=steamid64,
@@ -437,6 +442,7 @@ class CS2API(API):
         api_map = await self.get_map(map_name, course)
         return _record_to_pb(record, api_map)
 
+    @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
         record = await _top_record(self.mode, api_map=api_map, latest=False)
         if record is None:
@@ -451,6 +457,7 @@ class CS2API(API):
             pbs.append(_record_to_pb(pro_record, api_map))
         return pbs
 
+    @override
     async def get_profile(self, steamid64: int) -> Profile:
         player_url = _profile_url(steamid64)
         api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[self.mode]

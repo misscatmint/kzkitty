@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import override
 
 from aiohttp import ClientError, ClientSession
 from tortoise.exceptions import DoesNotExist
@@ -323,9 +324,11 @@ async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
     return records[0] if records else None
 
 class CSGOAPI(API):
+    @override
     def has_tp_wrs(self) -> bool:
         return True
 
+    @override
     async def get_map(self, name: str, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
         if not re.fullmatch('[A-za-z0-9_]+', name):
@@ -428,6 +431,7 @@ class CSGOAPI(API):
             logger.exception("Couldn't get global API PB place")
         return pbs[0]
 
+    @override
     async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
                          ) -> PersonalBest | None:
         if tp_type in {Type.TP, Type.ANY}:
@@ -462,6 +466,7 @@ class CSGOAPI(API):
             logger.exception("Couldn't get global API PB place")
         return pb
 
+    @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
         bonus = api_map.bonus or 0
         records = [await _record_for_map(api_map, self.mode, tp_type, bonus)
@@ -469,6 +474,7 @@ class CSGOAPI(API):
         return [_record_to_pb(record, api_map)
                 for record in records if record]
 
+    @override
     async def get_profile(self, steamid64: int) -> Profile:
         player_url = _profile_url(steamid64, self.mode)
         api_mode_id = {Mode.KZT: 200, Mode.SKZ: 201, Mode.VNL: 202}[self.mode]
