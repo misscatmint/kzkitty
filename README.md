@@ -30,7 +30,7 @@ Then, to run locally:
 
 ```sh
 source .venv/bin/activate
-KZKITTY_DB=kzkitty.db KZKITTY_DISCORD_TOKEN=... python -m kzkitty
+KZKITTY_DB=sqlite://kzkitty.db KZKITTY_DISCORD_TOKEN=... python -m kzkitty
 ```
 
 Optionally set the `KZKITTY_INITIAL_PLAYERS` environment variable to point to
@@ -58,7 +58,7 @@ services:
       context: ~/src/kzkitty
       dockerfile: Dockerfile
     environment:
-      - KZKITTY_DB=/etc/kzkitty/kzkitty.db
+      - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
       - KZKITTY_DEFAULT_PLAYERS=/etc/kzkitty/players.csv
       - KZKITTY_DISCORD_TOKEN=...
       - TZ=America/Chicago

@@ -1,6 +1,7 @@
+"""Bot object and command implementations"""
+
 import asyncio
 import logging
-import os
 from typing import Any
 
 from arc import (AutocompleteData, AutodeferMode, GatewayClient,
@@ -20,23 +21,40 @@ from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.models import (Map, Mode, Player, Type, close_db,
                             import_default_players, init_db)
 
-bot = GatewayBot(os.environ['KZKITTY_DISCORD_TOKEN'], intents=Intents.NONE)
-client = GatewayClient(bot)
-logger = logging.getLogger('kzkitty.bot')
-refresh_db_loop = IntervalLoop(refresh_db_maps, hours=24, run_on_start=True)
+__all__ = ['run']
 
-@client.add_startup_hook
-async def startup_hook(_: GatewayClient) -> None:
-    await init_db()
-    asyncio.create_task(import_default_players())
-    refresh_db_loop.start()
+_logger = logging.getLogger('kzkitty.bot')
 
-@client.add_shutdown_hook
-async def shutdown_hook(_: GatewayClient) -> None:
-    await close_db()
+def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
+    """Start the bot's main event loop"""
+    bot = GatewayBot(discord_token, intents=Intents.NONE)
+    client = GatewayClient(bot)
+    client.set_error_handler(_handle_error)
+    client.include(_slash_register)
+    client.include(_slash_unregister)
+    client.include(_slash_mode)
+    client.include(_slash_pb)
+    client.include(_slash_latest)
+    client.include(_slash_map)
+    client.include(_slash_profile)
+    
+    refresh_db_loop = IntervalLoop(refresh_db_maps, hours=refresh_db_hours,
+                                   run_on_start=True)
+    async def startup(_: GatewayClient) -> None:
+        await init_db(db_url)
+        asyncio.create_task(import_default_players())
+        refresh_db_loop.start()
+    client.add_startup_hook(startup)
 
-async def autocomplete_map(data: AutocompleteData[GatewayClient, str]
+    async def shutdown(_: GatewayClient) -> None:
+        await close_db()
+    client.add_shutdown_hook(shutdown)
+
+    bot.run()
+
+async def _autocomplete_map(data: AutocompleteData[GatewayClient, str]
                            ) -> list[str]:
+    """Autocomplete map names for slash commands"""
     if not data.focused_value:
         return []
     name = data.focused_value.lower()
@@ -49,31 +67,41 @@ async def autocomplete_map(data: AutocompleteData[GatewayClient, str]
                      .values('name'))
     return [m['name'] for m in maps]
 
-MapParams = StrParams('Map name', name='map',
-                      autocomplete_with=autocomplete_map)
-ModeParams = StrParams('Game mode', name='mode',
-                       choices=[Mode.KZT, Mode.SKZ, Mode.VNL, Mode.CKZ,
-                                Mode.VNL2])
-PlayerParams = MemberParams('Player', name='player')
-TypeParams = StrParams('Pro or teleport run', name='type',
-                       choices=[Type.PRO, Type.TP, Type.ANY])
-CourseParams = StrParams('Course')
-BonusParams = IntParams('Bonus', min=1)
+_MapParams = StrParams('Map name', name='map',
+                       autocomplete_with=_autocomplete_map)
+_ModeParams = StrParams('Game mode', name='mode',
+                        choices=[Mode.KZT, Mode.SKZ, Mode.VNL, Mode.CKZ,
+                                 Mode.VNL2])
+_PlayerParams = MemberParams('Player', name='player')
+_TypeParams = StrParams('Pro or teleport run', name='type',
+                        choices=[Type.PRO, Type.TP, Type.ANY])
+_CourseParams = StrParams('Course')
+_BonusParams = IntParams('Bonus', min=1)
 
-class PlayerNotFound(Exception):
+class _PlayerNotFound(Exception):
     pass
 
 async def _get_player(ctx: GatewayContext, player_member: Member | None=None
                       ) -> Player:
+    """Look up a registered player.
+
+    If the user isn't registered, this raises an error for the error handler
+    to present a friendly error message.
+    """
     try:
         return await Player.get(user_id=(player_member or ctx.user).id,
                                 server_id=ctx.guild_id)
     except DoesNotExist:
-        raise PlayerNotFound
+        raise _PlayerNotFound
 
 async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                    course: str | None=None, bonus: int | None=None
                    ) -> tuple[API, APIMap]:
+    """Look up a map/course/bonus for a given mode.
+
+    If the user hasn't explicitly chosen a specific mode, this will fall back
+    to looking up the map for both CS:GO and CS2.
+    """
     api = api_for_mode(mode)
     try:
         api_map = await api.get_map(map_name, course, bonus)
@@ -85,7 +113,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
         else:
             mode = Mode.KZT
         if isinstance(e, APIConnectionError):
-            logger.exception('API connection failure during map lookup')
+            _logger.exception('API connection failure during map lookup')
         api = api_for_mode(mode)
         api_map = await api.get_map(map_name, course, bonus)
     else:
@@ -99,9 +127,12 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
             api_map = await api.get_map(map_name, course, bonus)
     return api, api_map
 
-@client.set_error_handler
-async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
-    if isinstance(exc, PlayerNotFound):
+async def _handle_error(ctx: GatewayContext, exc: Exception) -> None:
+    """Turn certain exceptions into friendly error messages.
+
+    SteamError and APIError will still get raised.
+    """
+    if isinstance(exc, _PlayerNotFound):
         await ctx.respond('Not registered', flags=MessageFlag.EPHEMERAL)
         return
     elif isinstance(exc, APIMapAmbiguousError):
@@ -124,13 +155,14 @@ async def error_handler(ctx: GatewayContext, exc: Exception) -> None:
                           flags=MessageFlag.EPHEMERAL)
     raise exc
 
-@client.include
 @slash_command('register', 'Register account',
                autodefer=AutodeferMode.EPHEMERAL)
-async def slash_register(ctx: GatewayContext,
-                         profile: Option[str, StrParams('Steam profile URL')],
-                         mode_name: Option[str | None, ModeParams]=Mode.KZT
-                         ) -> None:
+async def _slash_register(ctx: GatewayContext,
+                          profile: Option[str,
+                                          StrParams('Steam profile URL')],
+                          mode_name: Option[str | None, _ModeParams]=Mode.KZT
+                          ) -> None:
+    """Register the user with a given Steam profile and game mode"""
     try:
         steamid64 = await steamid64_for_profile(profile)
     except SteamValueError:
@@ -144,17 +176,18 @@ async def slash_register(ctx: GatewayContext,
                                       defaults=defaults)
         await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
 
-@client.include
 @slash_command('unregister', 'Delete account settings')
-async def slash_unregister(ctx: GatewayContext) -> None:
+async def _slash_unregister(ctx: GatewayContext) -> None:
+    """Unregister the user"""
     player = await _get_player(ctx)
     await player.delete()
     await ctx.respond('Unregistered', flags=MessageFlag.EPHEMERAL)
 
-@client.include
 @slash_command('mode', 'Show or set default game mode')
-async def slash_mode(ctx: GatewayContext,
-                     mode_name: Option[str | None, ModeParams]=None) -> None:
+async def _slash_mode(ctx: GatewayContext,
+                      mode_name: Option[str | None, _ModeParams]=None
+                      ) -> None:
+    """Set the user's default game mode"""
     if mode_name is None:
         player = await _get_player(ctx)
         await ctx.respond(f'Mode set to {player.mode}',
@@ -168,16 +201,16 @@ async def slash_mode(ctx: GatewayContext,
     await ctx.respond(f'Mode set to {mode_name}',
                       flags=MessageFlag.EPHEMERAL)
 
-@client.include
 @slash_command('pb', 'Show personal best times', autodefer=True)
-async def slash_pb(ctx: GatewayContext,
-                   map_name: Option[str, MapParams],
-                   type_name: Option[str, TypeParams]=Type.ANY,
-                   mode_name: Option[str | None, ModeParams]=None,
-                   course: Option[str | None, CourseParams]=None,
-                   bonus: Option[int | None, BonusParams]=None,
-                   player_member: Option[Member | None, PlayerParams]=None
-                   ) -> None:
+async def _slash_pb(ctx: GatewayContext,
+                    map_name: Option[str, _MapParams],
+                    type_name: Option[str, _TypeParams]=Type.ANY,
+                    mode_name: Option[str | None, _ModeParams]=None,
+                    course: Option[str | None, _CourseParams]=None,
+                    bonus: Option[int | None, _BonusParams]=None,
+                    player_member: Option[Member | None, _PlayerParams]=None
+                    ) -> None:
+    """Look up a personal best time"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
@@ -188,13 +221,14 @@ async def slash_pb(ctx: GatewayContext,
     component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
-@client.include
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
-async def slash_latest(ctx: GatewayContext,
-                       type_name: Option[str, TypeParams]=Type.ANY,
-                       mode_name: Option[str | None, ModeParams]=None,
-                       player_member: Option[Member | None, PlayerParams]=None
-                       ) -> None:
+async def _slash_latest(ctx: GatewayContext,
+                        type_name: Option[str, _TypeParams]=Type.ANY,
+                        mode_name: Option[str | None, _ModeParams]=None,
+                        player_member: Option[Member | None,
+                                              _PlayerParams]=None
+                        ) -> None:
+    """Look up the user's latest personal best for a given game mode"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     api = api_for_mode(mode)
@@ -206,19 +240,19 @@ async def slash_latest(ctx: GatewayContext,
     component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
-@client.include
 @slash_command('map', 'Show map info and world record times', autodefer=True)
-async def slash_map(ctx: GatewayContext,
-                    map_name: Option[str, MapParams],
-                    mode_name: Option[str | None, ModeParams]=None,
-                    course: Option[str | None, CourseParams]=None,
-                    bonus: Option[int | None, BonusParams]=None) -> None:
+async def _slash_map(ctx: GatewayContext,
+                     map_name: Option[str, _MapParams],
+                     mode_name: Option[str | None, _ModeParams]=None,
+                     course: Option[str | None, _CourseParams]=None,
+                     bonus: Option[int | None, _BonusParams]=None) -> None:
+    """Look up map info"""
     if mode_name is not None:
         mode = Mode(mode_name)
     else:
         try:
             player = await _get_player(ctx)
-        except PlayerNotFound:
+        except _PlayerNotFound:
             mode = Mode.KZT
         else:
             mode = player.mode
@@ -228,13 +262,14 @@ async def slash_map(ctx: GatewayContext,
     component = await map_component(api_map, wrs, api.has_tp_wrs())
     await ctx.respond(component=component)
 
-@client.include
 @slash_command('profile', 'Show rank, point total, and point average',
                autodefer=True)
-async def slash_profile(ctx: GatewayContext,
-                        mode_name: Option[str | None, ModeParams]=None,
-                        player_member: Option[Member | None, PlayerParams]=None
-                        ) -> None:
+async def _slash_profile(ctx: GatewayContext,
+                         mode_name: Option[str | None, _ModeParams]=None,
+                         player_member: Option[Member | None,
+                                               _PlayerParams]=None
+                         ) -> None:
+    """Look up the user's profile information"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     api = api_for_mode(mode)
