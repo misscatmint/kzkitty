@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import override
 
 from aiohttp import ClientError, ClientSession
+from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
@@ -14,6 +15,60 @@ from kzkitty.api.steam import SteamError, name_for_steamid64
 from kzkitty.models import Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.cs2')
+
+class _APICourseFilter(BaseModel):
+    nub_tier: str
+    pro_tier: str
+
+class _APICourseFilters(BaseModel):
+    classic: _APICourseFilter
+    vanilla: _APICourseFilter
+
+class _APICourse(BaseModel):
+    name: str
+    filters: _APICourseFilters
+
+class _APIMap(BaseModel):
+    id: int
+    name: str
+    state: str
+    courses: list[_APICourse]
+
+class _APIMapResults(BaseModel):
+    values: list[_APIMap]
+
+def _utc_datetime(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc)
+
+class _APIPlayer(BaseModel):
+    id: str
+    name: str
+
+class _APIShallowMap(BaseModel):
+    name: str
+
+class _APIShallowCourse(BaseModel):
+    name: str
+
+class _APIRecord(BaseModel):
+    id: UUID7
+    player: _APIPlayer
+    map: _APIShallowMap
+    course: _APIShallowCourse
+    teleports: int
+    time: timedelta
+    nub_points: float | None
+    nub_rank: int | None
+    pro_points: float | None
+    pro_rank: int | None
+
+class _APIRecordResults(BaseModel):
+    values: list[_APIRecord]
+
+class _APIProfile(BaseModel):
+    name: str
+    ckz_rating: float
+    vnl_rating: float
 
 async def _thumbnail_for_map(name: str, course_id: int=1) -> bytes | None:
     thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
@@ -52,36 +107,24 @@ async def refresh_cs2_db_maps() -> None:
                     _logger.error("Couldn't get global API maps (HTTP %d)",
                                   r.status)
                     return
-                results = await r.json()
+                json = await r.text()
     except ClientError:
         _logger.exception("Couldn't get global API maps")
         return
 
-    if not isinstance(results, dict):
-        _logger.error('Malformed global API maps response (not a dict)')
-        return
-    maps = results.get('values')
-    if not isinstance(maps, list):
-        _logger.error('Malformed global API maps response (maps not a list)')
+    try:
+        results = _APIMapResults.model_validate_json(json)
+    except ValidationError:
+        _logger.exception('Malformed global API maps')
         return
 
     new = 0
     updated = 0
     deleted = 0
-    for map_info in maps:
-        map_id = map_info.get('id')
-        if not isinstance(map_id, int):
-            _logger.error('Malformed global API maps response (id not an int)')
-            continue
-        state = map_info.get('state')
-        if not isinstance(state, str):
-            _logger.error('Malformed global API maps response'
-                          ' (state not a str)')
-            continue
-
-        if state != 'approved':
+    for api_map in results.values:
+        if api_map.state != 'approved':
             try:
-                db_map = await Map.get(map_id=map_id, is_cs2=True)
+                db_map = await Map.get(map_id=api_map.id, is_cs2=True)
             except DoesNotExist:
                 pass
             else:
@@ -89,102 +132,58 @@ async def refresh_cs2_db_maps() -> None:
                 deleted += 1
             continue
 
-        name = map_info.get('name')
-        if not isinstance(name, str):
-            _logger.error('Malformed global API maps response (name not a str)')
-            continue
-        courses = map_info.get('courses')
-        if not isinstance(courses, list):
-            _logger.error('Malformed global API maps response'
-                          ' (courses not a list)')
-            continue
         tier = pro_tier = vnl_tier = vnl_pro_tier = course_name = None
-        if courses:
-            course_info = courses[0]
-            if not isinstance(course_info, dict):
-                _logger.error('Malformed global API maps response'
-                              ' (course info not a dict)')
-                continue
-            course_name = course_info.get('name')
-            if not isinstance(course_name, str):
-                raise APIError('Malformed global API map response'
-                               ' (course name not a str)')
-            filters = course_info.get('filters')
-            if not isinstance(filters, dict):
-                _logger.error('Malformed global API maps response'
-                              ' (filters not a dict)')
-                continue
-            classic_filter = filters.get('classic')
-            if (not isinstance(classic_filter, dict) and
-                classic_filter is not None):
-                _logger.error('Malformed global API maps response'
-                              ' (filters not a dict)')
-                continue
-            if classic_filter is not None:
-                tier_code = classic_filter.get('nub_tier')
-                pro_tier_code = classic_filter.get('pro_tier')
-                if (not isinstance(tier_code, str) or
-                    not isinstance(pro_tier_code, str)):
-                    _logger.error('Malformed global API maps response'
-                                  ' (classic tier not a str)')
-                    continue
-                tier = _tier_num(tier_code) or 10
-                pro_tier = _tier_num(pro_tier_code) or 10
-            vanilla_filter = filters.get('vanilla')
-            if (not isinstance(vanilla_filter, dict) and
-                vanilla_filter is not None):
-                _logger.error('Malformed global API maps response'
-                              ' (filters not a dict)')
-                continue
-            if vanilla_filter is not None:
-                vnl_tier_code = vanilla_filter.get('nub_tier')
-                vnl_pro_tier_code = vanilla_filter.get('pro_tier')
-                if (not isinstance(vnl_tier_code, str) or
-                    not isinstance(vnl_pro_tier_code, str)):
-                    _logger.error('Malformed global API maps response'
-                                  ' (vanilla tier not a str)')
-                    continue
-                vnl_tier = _tier_num(vnl_tier_code) or 10
-                vnl_pro_tier = _tier_num(vnl_pro_tier_code) or 10
+        if api_map.courses:
+            course = api_map.courses[0]
+            course_name = course.name
+            filters = course.filters
+            tier = _tier_num(filters.classic.nub_tier)
+            pro_tier = _tier_num(filters.classic.pro_tier)
+            vnl_tier = _tier_num(filters.vanilla.nub_tier)
+            vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
 
         try:
-            db_map = await Map.get(map_id=map_id, is_cs2=True)
+            db_map = await Map.get(map_id=api_map.id, is_cs2=True)
         except DoesNotExist:
-            _logger.info('Downloading thumbnail for map %s', name)
-            thumbnail = await _thumbnail_for_map(name)
-            await Map(map_id=map_id, is_cs2=True, name=name, tier=tier,
-                      pro_tier=pro_tier, vnl_tier=vnl_tier,
+            _logger.info('Downloading thumbnail for map %s', api_map.name)
+            thumbnail = await _thumbnail_for_map(api_map.name)
+            await Map(map_id=api_map.id, is_cs2=True, name=api_map.name,
+                      tier=tier, pro_tier=pro_tier, vnl_tier=vnl_tier,
                       vnl_pro_tier=vnl_pro_tier, main_course=course_name,
                       thumbnail=thumbnail).save()
             new += 1
         else:
             thumbnail = db_map.thumbnail
             if thumbnail is None:
-                thumbnail = await _thumbnail_for_map(name)
+                thumbnail = await _thumbnail_for_map(api_map.name)
             changed = False
+            if db_map.name != api_map.name:
+                _logger.info('Updating name for map %s', api_map.name)
+                db_map.name = api_map.name
+                changed = True
             if db_map.main_course != course_name and course_name is not None:
-                _logger.info('Updating main_course for map %s', name)
+                _logger.info('Updating main course for map %s', api_map.name)
                 db_map.main_course = course_name
                 changed = True
             if db_map.tier != tier and tier is not None:
-                _logger.info('Updating tier for map %s', name)
+                _logger.info('Updating tier for map %s', api_map.name)
                 db_map.tier = tier
                 changed = True
             if db_map.pro_tier != pro_tier and pro_tier is not None:
-                _logger.info('Updating pro tier for map %s', name)
+                _logger.info('Updating pro tier for map %s', api_map.name)
                 db_map.pro_tier = pro_tier
                 changed = True
             if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                _logger.info('Updating VNL tier for map %s', name)
+                _logger.info('Updating VNL tier for map %s', api_map.name)
                 db_map.vnl_tier = vnl_tier
                 changed = True
             if (db_map.vnl_pro_tier != vnl_pro_tier and
                 vnl_pro_tier is not None):
-                _logger.info('Updating VNL pro tier for map %s', name)
+                _logger.info('Updating VNL pro tier for map %s', api_map.name)
                 db_map.vnl_pro_tier = vnl_pro_tier
                 changed = True
             if db_map.thumbnail != thumbnail and thumbnail is not None:
-                _logger.info('Updating thumbnail for map %s', name)
+                _logger.info('Updating thumbnail for map %s', api_map.name)
                 db_map.thumbnail = thumbnail
                 changed = True
             if changed:
@@ -209,7 +208,7 @@ def _profile_url(steamid64: int) -> str:
 
 async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
                       api_map: APIMap | None=None,
-                      tp_type: Type | None=None) -> dict | None:
+                      tp_type: Type | None=None) -> _APIRecord | None:
     api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[mode]
     url = f'https://api.cs2kz.org/records?mode={api_mode_id}&top=true'
     if steamid64 is not None:
@@ -232,55 +231,35 @@ async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
                 if r.status != 200:
                     raise APIError("Couldn't get global API PBs (HTTP %d)" %
                                    r.status)
-                results = await r.json()
+                json = await r.text()
     except ClientError as e:
         raise APIConnectionError("Couldn't get global API PBs") from e
-    if not isinstance(results, dict):
-        raise APIError('Malformed global API PBs (results not a dict)')
-    records = results.get('values')
-    if not isinstance(records, list):
-        raise APIError('Malformed global API PBs (not a list)')
-    if records and not isinstance(records[0], dict):
-        raise APIError('Malformed global API PBs (not a list of dicts)')
-    return records[0] if records else None
 
-def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
-    player = record.get('player')
-    if not isinstance(player, dict):
-        raise APIError('Malformed global API PB (player not a dict)')
-    steamid = player.get('id')
-    player_name = player.get('name')
-    record_id = record.get('id')
-    teleports = record.get('teleports')
-    time = record.get('time')
-    submitted_at = record.get('submitted_at')
-    if (not isinstance(steamid, str) or
-        not isinstance(player_name, str) or
-        not isinstance(record_id, int) or
-        not isinstance(teleports, int) or
-        not isinstance(time, float) or
-        not isinstance(submitted_at, str)):
-        raise APIError('Malformed global API PB')
     try:
-        date = datetime.fromisoformat(submitted_at)
-    except ValueError as e:
-        raise APIError('Malformed global API PB (bad date)') from e
-    date = date.replace(tzinfo=timezone.utc)
-    steamid64 = _steamid_to_steamid64(steamid)
+        records = _APIRecordResults.model_validate_json(json)
+    except ValidationError as e:
+        raise APIError('Malformed global API PBs') from e
+    return records.values[0] if records.values else None
+
+def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
+    steamid64 = _steamid_to_steamid64(record.player.id)
     player_url = _profile_url(steamid64) 
-    if teleports == 0:
-        points = record.get('pro_points')
-        place = record.get('pro_rank')
+    if record.teleports == 0:
+        points = record.pro_points
+        place = record.pro_rank
     else:
-        points = record.get('nub_points')
-        place = record.get('nub_rank')
+        points = record.nub_points
+        place = record.nub_rank
     if not isinstance(points, float) or not isinstance(place, int):
         raise APIError('Malformed global API PB')
-    return PersonalBest(id=record_id, steamid64=steamid64,
-                        player_name=player_name, player_url=player_url,
-                        map=api_map, time=timedelta(seconds=time),
-                        teleports=teleports, points=int(points),
-                        point_scale=10000, place=place, date=date)
+    submitted_at = datetime.fromtimestamp(record.id.time / 1000.0,
+                                          tz=timezone.utc)
+    return PersonalBest(id=record.id.int, steamid64=steamid64,
+                        player_name=record.player.name, player_url=player_url,
+                        map=api_map, time=record.time,
+                        teleports=record.teleports, points=int(points),
+                        point_scale=10000, place=place,
+                        date=submitted_at)
 
 class CS2API(API):
     @override
@@ -333,7 +312,7 @@ class CS2API(API):
                         elif r.status != 200:
                             raise APIError("Couldn't get global API map "
                                            '(HTTP %d)' % r.status)
-                        json = await r.json()
+                        json = await r.text()
             except ClientError as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
@@ -341,62 +320,33 @@ class CS2API(API):
                 raise APIMapError("Bonuses aren't supported on CS2. "
                                   'Did you mean to specify a course?')
 
-            if not isinstance(json, dict):
-                raise APIError('Malformed global API map response '
-                               '(not a dict)')
+            try:
+                api_map = _APIMap.model_validate_json(json)
+            except ValidationError as e:
+                raise APIError('Malformed global API map') from e
 
-            courses = json.get('courses')
-            if not isinstance(courses, list):
-                raise APIError('Malformed global API map response '
-                               '(courses not a list)')
+            courses = api_map.courses
             if courses and course is None:
                 course_id = 1
                 course_info = courses[0]
-                if not isinstance(course_info, dict):
-                    raise APIError('Malformed global API map response '
-                                   '(course not a dict)')
-                course_name = course_info.get('name')
-                if not isinstance(course_name, str):
-                    raise APIError('Malformed global API map response '
-                                   '(course name not a str)')
+                course_name = course_info.name
             else:
                 course = course or 'Main'
                 course_id = None
                 course_info = None
                 course_name = None
                 for course_id, course_info in enumerate(courses, start=1):
-                    if not isinstance(course_info, dict):
-                        raise APIError('Malformed global API map response '
-                                       '(course not a dict)')
-                    course_name = course_info.get('name')
-                    if not isinstance(course_name, str):
-                        raise APIError('Malformed global API map response '
-                                       '(course name not a str)')
+                    course_name = course_info.name
                     if course.lower() in course_name.lower():
                         break
                 else:
                     raise APIMapError('Map course not found')
 
-            course_filters = course_info.get('filters')
-            if not isinstance(course_filters, dict):
-                raise APIError('Malformed global API map response '
-                               '(course filters not a dict)')
-            if self.mode == Mode.VNL2:
-                course_filter = course_filters.get('vanilla') 
-            else:
-                course_filter = course_filters.get('classic')
-            if course_filter is None:
-                tier = pro_tier = None
-                tier_name = pro_tier_name = 'Unknown'
-            else:
-                tier_code = course_filter.get('nub_tier')
-                pro_tier_code = course_filter.get('pro_tier')
-                if (not isinstance(tier_code, str) or
-                    not isinstance(pro_tier_code, str)):
-                    raise APIError('Malformed global API map response '
-                                   '(tier not a astr)')
-                tier = _tier_num(tier_code)
-                pro_tier = _tier_num(pro_tier_code)
+            course_filters = course_info.filters
+            course_filter = {Mode.CKZ: course_filters.classic,
+                             Mode.VNL2: course_filters.vanilla}[self.mode]
+            tier = _tier_num(course_filter.nub_tier)
+            pro_tier = _tier_num(course_filter.pro_tier)
 
         tier_name = _tier_name(tier)
         pro_tier_name = _tier_name(pro_tier)
@@ -427,19 +377,7 @@ class CS2API(API):
                                    tp_type=tp_type)
         if record is None:
             return None
-        map_info = record.get('map')
-        if not isinstance(map_info, dict):
-            raise APIError('Malformed global API PBs (map not a dict)')
-        map_name = map_info.get('name')
-        if not isinstance(map_name, str):
-            raise APIError('Malformed global API PBs (map name not a str)')
-        course_info = record.get('course')
-        if not isinstance(course_info, dict):
-            raise APIError('Malformed global API PBs (course not a dict)')
-        course = course_info.get('name')
-        if not isinstance(course, str):
-            raise APIError('Malformed global API PBs (course name not a str)')
-        api_map = await self.get_map(map_name, course)
+        api_map = await self.get_map(record.map.name, record.course.name)
         return _record_to_pb(record, api_map)
 
     @override
@@ -448,7 +386,7 @@ class CS2API(API):
         if record is None:
             return []
         pbs = [_record_to_pb(record, api_map)]
-        pro_rank = record.get('pro_rank')
+        pro_rank = record.pro_rank
         if pro_rank is not None:
             return pbs
         pro_record = await _top_record(self.mode, api_map=api_map,
@@ -460,14 +398,12 @@ class CS2API(API):
     @override
     async def get_profile(self, steamid64: int) -> Profile:
         player_url = _profile_url(steamid64)
-        api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[self.mode]
-        url = (f'https://api.cs2kz.org/players/{steamid64}/profile?'
-               f'mode={api_mode_id}')
+        url = f'https://api.cs2kz.org/players/{steamid64}'
         try:
             async with ClientSession() as session:
                 async with session.get(url) as r:
                     if r.status == 200:
-                        profile = await r.json()
+                        json = await r.text()
                     elif r.status == 404:
                         try:
                             player_name = await name_for_steamid64(steamid64)
@@ -477,16 +413,18 @@ class CS2API(API):
                                        mode=self.mode, rank=Rank.UNKNOWN,
                                        points=0, average=None)
                     else:
-                        raise APIError("Couldn't get global API PBs "
+                        raise APIError("Couldn't get global API profile "
                                        '(HTTP %d)' % r.status)
         except ClientError as e:
             raise APIConnectionError("Couldn't get global API PBs") from e
-        if not isinstance(profile, dict):
-            raise APIError('Malformed global API profile (not a dict)')
-        rating = profile.get('rating')
-        if not isinstance(rating, float):
-            raise APIError('Malformed global API ranks (rating not a float)')
 
+        try:
+            profile = _APIProfile.model_validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API profile') from e
+
+        rating = {Mode.CKZ: profile.ckz_rating,
+                  Mode.VNL2: profile.vnl_rating}[self.mode]
         points = rating / 10
         if points == 0.0:
             rank = Rank.NEW
@@ -504,6 +442,6 @@ class CS2API(API):
             for threshold, rank in thresholds:
                 if points >= threshold:
                     break
-        return Profile(name=profile.get('name'), url=player_url,
+        return Profile(name=profile.name, url=player_url,
                        mode=self.mode, rank=rank, points=int(points),
                        average=None)
