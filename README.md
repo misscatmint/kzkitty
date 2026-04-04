@@ -41,6 +41,9 @@ user_id,server_id,steamid64,mode
 This will prepopulate the database with Discord users mapped to Steam IDs and
 preferred KZ game modes (on a per-Discord server basis).
 
+`KZKITTY_REFRESH_DB_HOURS` can optionally be used to control how frequently
+the map cache is updated from the global APIs. The default is 24 hours.
+
 ## Deployment
 
 To deploy with Docker Compose, use a `compose.yaml` file:
