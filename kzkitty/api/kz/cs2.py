@@ -44,17 +44,17 @@ class _APIPlayer(BaseModel):
     id: str
     name: str
 
-class _APIShallowMap(BaseModel):
+class _ShallowAPIMap(BaseModel):
     name: str
 
-class _APIShallowCourse(BaseModel):
+class _ShallowAPICourse(BaseModel):
     name: str
 
 class _APIRecord(BaseModel):
     id: UUID7
     player: _APIPlayer
-    map: _APIShallowMap
-    course: _APIShallowCourse
+    map: _ShallowAPIMap
+    course: _ShallowAPICourse
     teleports: int
     time: timedelta
     nub_points: float | None
