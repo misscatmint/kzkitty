@@ -21,8 +21,6 @@ from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.models import (Map, Mode, Player, Type, close_db,
                             import_default_players, init_db)
 
-__all__ = ['run']
-
 _logger = logging.getLogger('kzkitty.bot')
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
