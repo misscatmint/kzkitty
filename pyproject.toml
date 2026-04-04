@@ -8,6 +8,7 @@ dependencies = [
     "aiohttp[speedups]>=3.13.5",
     "hikari-arc>=2.2.0",
     "hikari[speedups]>=2.5.0",
+    "pydantic>=2.12.5",
     "tortoise-orm>=1.1.7",
     "uvloop>=0.22.1",
 ]
