@@ -106,10 +106,11 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     except (APIConnectionError, APIMapNotFoundError) as e:
         if mode_name is not None:
             raise
-        elif mode in {Mode.KZT, Mode.SKZ, Mode.VNL}:
-            mode = Mode.CKZ
-        else:
-            mode = Mode.KZT
+        mode = {Mode.KZT: Mode.CKZ,
+                Mode.SKZ: Mode.CKZ,
+                Mode.VNL: Mode.VNL2,
+                Mode.CKZ: Mode.KZT,
+                Mode.VNL2: Mode.VNL}[mode]
         if isinstance(e, APIConnectionError):
             _logger.exception('API connection failure during map lookup')
         api = api_for_mode(mode)
