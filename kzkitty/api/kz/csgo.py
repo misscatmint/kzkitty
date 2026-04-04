@@ -1,9 +1,10 @@
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import override
+from typing import Annotated, override
 
 from aiohttp import ClientError, ClientSession
+from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
@@ -15,40 +16,61 @@ from kzkitty.models import Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.csgo')
 
-async def _vnl_tiers() -> dict[int, tuple[int, int]] | None:
+class _APIMap(BaseModel):
+    id: int
+    name: str
+    difficulty: int
+    validated: bool
+
+class _VNLMap(BaseModel):
+    id: int
+    tpTier: int
+    proTier: int
+
+def _utc_datetime(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc)
+
+class _APIRecord(BaseModel):
+    id: int
+    steamid64: int
+    player_name: str | None
+    map_name: str
+    stage: int
+    time: timedelta
+    teleports: int
+    points: int
+    created_on: Annotated[datetime, AfterValidator(_utc_datetime)]
+
+class _APIPlayerRank(BaseModel):
+    player_name: str | None
+    points: int
+    average: float
+
+_APIMapResult = TypeAdapter(_APIMap | None)
+_APIMapList = TypeAdapter(list[_APIMap])
+_VNLMapList = TypeAdapter(list[_VNLMap])
+_APIRecordList = TypeAdapter(list[_APIRecord])
+_APIPlayerRankList = TypeAdapter(list[_APIPlayerRank])
+_APIPlace = TypeAdapter(int)
+
+async def _vnl_tiers() -> dict[int, tuple[int, int]]:
     url = 'https://vnlkz.com/api/maps'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
                 if r.status != 200:
-                    _logger.error("Couldn't get VNL API maps (HTTP %d)",
-                                  r.status)
-                    return None
-                json = await r.json()
-    except ClientError:
-        _logger.exception("Couldn't get VNL API maps")
-        return None
+                    raise APIError("Couldn't get VNL API maps (HTTP %d)",
+                                   r.status)
+                json = await r.text()
+    except ClientError as e:
+        raise APIError("Couldn't get VNL API maps")
+    try:
+        vnl_maps = _VNLMapList.validate_json(json)
+    except ValidationError as e:
+        raise APIError('Malformed VNL API maps') from e
+    return {m.id: (m.tpTier, m.proTier) for m in vnl_maps}
 
-    if not isinstance(json, list):
-        _logger.error('Malformed VNL API maps response (not a list)')
-        return None
-
-    maps = {}
-    for map_info in json:
-        map_id = map_info.get('id')
-        if not isinstance(map_id, int):
-            _logger.error('Malformed VNL API maps response (id not an int)')
-            continue
-        tp_tier = map_info.get('tpTier')
-        pro_tier = map_info.get('proTier')
-        if not isinstance(tp_tier, int) or not isinstance(pro_tier, int):
-            _logger.error('Malformed VNL API maps response'
-                          ' (tp/pro tiers not ints)')
-            continue
-        maps[map_id] = (tp_tier, pro_tier)
-    return maps
-
-async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
+async def _vnl_tiers_for_map(name: str) -> tuple[int, int]:
     url = f'https://vnlkz.com/api/maps/{name}'
     try:
         async with ClientSession() as session:
@@ -58,18 +80,14 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int | None, int | None]:
                 elif r.status != 200:
                     raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
                                    r.status)
-                json = await r.json()
+                json = await r.text()
     except ClientError as e:
         raise APIConnectionError("Couldn't get VNL map tiers") from e
-
-    if not isinstance(json, dict):
-        raise APIError("Malformed VNL JSON (not a dict)")
-    tp_tier = json.get('tpTier')
-    pro_tier = json.get('proTier')
-    if (not isinstance(tp_tier, int) or
-        not isinstance(pro_tier, int)):
-        raise APIError("Malformed VNL JSON (tpTier/proTier not an int)")
-    return tp_tier, pro_tier
+    try:
+        vnl_map = _VNLMap.model_validate_json(json)
+    except ValidationError as e:
+        raise APIError('Malformed VNL API map') from e
+    return vnl_map.tpTier, vnl_map.proTier
 
 async def _thumbnail_for_map(name: str) -> bytes | None:
     thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
@@ -97,44 +115,31 @@ async def refresh_csgo_db_maps() -> None:
                     _logger.error("Couldn't get global API maps (HTTP %d)",
                                   r.status)
                     return
-                json = await r.json()
+                json = await r.text()
     except ClientError:
         _logger.exception("Couldn't get global API maps")
         return
 
-    if not isinstance(json, list):
-        _logger.error('Malformed global API maps response (not a list)')
+    try:
+        api_maps = _APIMapList.validate_json(json)
+    except ValidationError:
+        _logger.exception('Malformed global API maps')
         return
 
     _logger.info('Downloading CSGO VNL map tiers')
-    vnl_tiers: dict[int, tuple[int, int]] | None = await _vnl_tiers()
+    try:
+        vnl_tiers: dict[int, tuple[int, int]] | None = await _vnl_tiers()
+    except APIError:
+        _logger.exception("Couldn't get VNL map tiers")
+        vnl_tiers = None
 
     new = 0
     updated = 0
     deleted = 0
-    for map_info in json:
-        map_id = map_info.get('id')
-        if not isinstance(map_id, int):
-            _logger.error('Malformed global API maps response (id not an int)')
-            continue
-        name = map_info.get('name')
-        if not isinstance(name, str):
-            _logger.error('Malformed global API maps response (name not a str)')
-            continue
-        tier = map_info.get('difficulty')
-        if not isinstance(tier, int):
-            _logger.error('Malformed global API maps response'
-                          ' (tier not an int)')
-            continue
-        validated = map_info.get('validated')
-        if not isinstance(validated, bool):
-            _logger.error('Malformed global API maps response'
-                          ' (validated not a bool)')
-            continue
-
-        if not validated:
+    for api_map in api_maps:
+        if not api_map.validated:
             try:
-                db_map = await Map.get(map_id=map_id, is_cs2=False)
+                db_map = await Map.get(map_id=api_map.id, is_cs2=False)
             except DoesNotExist:
                 pass
             else:
@@ -143,38 +148,43 @@ async def refresh_csgo_db_maps() -> None:
             continue
 
         if vnl_tiers is not None:
-            vnl_tier, vnl_pro_tier = vnl_tiers.get(map_id, (10, 10))
+            vnl_tier, vnl_pro_tier = vnl_tiers.get(api_map.id, (10, 10))
         else:
             vnl_tier = vnl_pro_tier = None
         try:
-            db_map = await Map.get(map_id=map_id, is_cs2=False)
+            db_map = await Map.get(map_id=api_map.id, is_cs2=False)
         except DoesNotExist:
-            _logger.info('Downloading thumbnail for map %s', name)
-            thumbnail = await _thumbnail_for_map(name)
-            await Map(map_id=map_id, is_cs2=False, name=name, tier=tier,
-                      pro_tier=tier, vnl_tier=vnl_tier,
-                      vnl_pro_tier=vnl_pro_tier, thumbnail=thumbnail).save()
+            _logger.info('Downloading thumbnail for map %s', api_map.name)
+            thumbnail = await _thumbnail_for_map(api_map.name)
+            await Map(map_id=api_map.id, is_cs2=False, name=api_map.name,
+                      tier=api_map.difficulty, pro_tier=api_map.difficulty,
+                      vnl_tier=vnl_tier, vnl_pro_tier=vnl_pro_tier,
+                      thumbnail=thumbnail).save()
             new += 1
         else:
             thumbnail = db_map.thumbnail
             if thumbnail is None:
-                thumbnail = await _thumbnail_for_map(name)
+                thumbnail = await _thumbnail_for_map(api_map.name)
             changed = False
-            if db_map.tier != tier:
-                _logger.info('Updating tier for map %s', name)
-                db_map.tier = db_map.pro_tier = tier
+            if db_map.name != api_map.name:
+                _logger.info('Updating name for map %s', api_map.name)
+                db_map.name = api_map.name
+                changed = True
+            if db_map.tier != api_map.difficulty:
+                _logger.info('Updating tier for map %s', api_map.name)
+                db_map.tier = db_map.pro_tier = api_map.difficulty
                 changed = True
             if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                _logger.info('Updating VNL tier for map %s', name)
+                _logger.info('Updating VNL tier for map %s', api_map.name)
                 db_map.vnl_tier = vnl_tier
                 changed = True
             if (db_map.vnl_pro_tier != vnl_pro_tier and
                 vnl_pro_tier is not None):
-                _logger.info('Updating VNL pro tier for map %s', name)
+                _logger.info('Updating VNL pro tier for map %s', api_map.name)
                 db_map.vnl_pro_tier = vnl_pro_tier
                 changed = True
             if db_map.thumbnail != thumbnail and thumbnail is not None:
-                _logger.info('Updating thumbnail for map %s', name)
+                _logger.info('Updating thumbnail for map %s', api_map.name)
                 db_map.thumbnail = thumbnail
                 changed = True
             if changed:
@@ -212,7 +222,7 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  tp_type: Type=Type.ANY,
                                  map_name: str | None=None,
                                  stage: int | None=None,
-                                 limit: int | None=None) -> list[dict]:
+                                 limit: int | None=None) -> list[_APIRecord]:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     url = ('https://kztimerglobal.com/api/v2.0/records/top?'
@@ -236,50 +246,22 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
                 if r.status != 200:
                     raise APIError("Couldn't get global API PBs (HTTP %d)" %
                                    r.status)
-                records = await r.json()
+                json = await r.text()
     except ClientError as e:
         raise APIConnectionError("Couldn't get global API PBs") from e
-    if not isinstance(records, list):
-        raise APIError('Malformed global API PBs (not a list)')
-    if records and not isinstance(records[0], dict):
-        raise APIError('Malformed global API PBs (not a list of dicts)')
-    return records
 
-def _record_to_pb(record: dict, api_map: APIMap) -> PersonalBest:
-    steamid64_str = record.get('steamid64')
-    if steamid64_str is None:
-        raise APIError('Malformed global API PB (missing steamid64)')
     try:
-        steamid64 = int(steamid64_str)
-    except ValueError as e:
-        raise APIError('Malformed global API PB (bad steamid64)') from e
-    player_name = record.get('player_name')
-    if not isinstance(player_name, str) and player_name is not None:
-        raise APIError('Malformed global API PB (bad player_name)')
-    stage = record.get('stage')
-    record_id = record.get('id')
-    time = record.get('time')
-    teleports = record.get('teleports')
-    points = record.get('points')
-    created_on = record.get('created_on')
-    if (not isinstance(stage, int) or
-        not isinstance(record_id, int) or
-        not isinstance(time, float) or
-        not isinstance(teleports, int) or
-        not isinstance(points, int) or
-        not isinstance(created_on, str)):
-        raise APIError('Malformed global API PB')
-    try:
-        date = datetime.fromisoformat(created_on)
-    except ValueError as e:
-        raise APIError('Malformed global API PB (bad date)') from e
-    date = date.replace(tzinfo=timezone.utc)
-    player_url = _profile_url(steamid64, api_map.mode)
-    return PersonalBest(id=record_id, steamid64=steamid64,
-                        player_name=player_name, player_url=player_url,
-                        map=api_map, time=timedelta(seconds=time),
-                        teleports=teleports, points=points, point_scale=1000,
-                        place=None, date=date)
+        return _APIRecordList.validate_json(json)
+    except ValidationError as e:
+        raise APIError('Malformed global API PBs') from e
+
+def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
+    player_url = _profile_url(record.steamid64, api_map.mode)
+    return PersonalBest(id=record.id, steamid64=record.steamid64,
+                        player_name=record.player_name, player_url=player_url,
+                        map=api_map, time=record.time,
+                        teleports=record.teleports, points=record.points,
+                        point_scale=1000, place=None, date=record.created_on)
 
 async def _place_for_pb(pb: PersonalBest) -> int:
     url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
@@ -289,15 +271,16 @@ async def _place_for_pb(pb: PersonalBest) -> int:
                 if r.status != 200:
                     raise APIError("Couldn't get global API PB place "
                                    '(HTTP %d)' % r.status)
-                place = await r.json()
+                json = await r.text()
     except ClientError as e:
         raise APIConnectionError("Couldn't get global API PB place") from e
-    if not isinstance(place, int):
-        raise APIError('Malformed global API PB place (not an int)')
-    return place
+    try:
+        return _APIPlace.validate_json(json)
+    except ValidationError as e:
+        raise APIError('Malformed global API place') from e
 
 async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
-                          stage: int | None=None) -> dict | None:
+                          stage: int | None=None) -> _APIRecord | None:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     stage = stage or 0
@@ -314,13 +297,13 @@ async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
                 if r.status != 200:
                     raise APIError("Couldn't get global API WR "
                                    '(HTTP %d)' % r.status)
-                records = await r.json()
+                json = await r.text()
     except ClientError as e:
         raise APIConnectionError("Couldn't get global API WR") from e
-    if not isinstance(records, list):
-        raise APIError('Malformed global API WR (not a list)')
-    if records and not isinstance(records[0], dict):
-        raise APIError('Malformed global API WR (not a list of dicts)')
+    try:
+        records = _APIRecordList.validate_json(json)
+    except ValidationError as e:
+        raise APIError('Malformed global API PBs') from e
     return records[0] if records else None
 
 class CSGOAPI(API):
@@ -361,19 +344,18 @@ class CSGOAPI(API):
                         if r.status != 200:
                             raise APIError("Couldn't get global API map "
                                            '(HTTP %d)' % r.status)
-                        json = await r.json()
+                        json = await r.text()
             except ClientError as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
-            if json is None:
+            try:
+                api_map = _APIMapResult.validate_json(json)
+            except ValidationError as e:
+                raise APIError('Malformed global API map') from e
+            if api_map is None:
                 raise APIMapNotFoundError('Map not found')
-            elif not isinstance(json, dict):
-                raise APIError('Malformed global API map response '
-                               '(not a dict)')
-            tier = pro_tier = json.get('difficulty')
-            if not isinstance(tier, int):
-                raise APIError('Malformed global API map response '
-                               '(tier not an int)')
+            name = api_map.name
+            tier = pro_tier = api_map.difficulty
             vnl_tier = vnl_pro_tier = thumbnail = None
 
         if course is not None:
@@ -448,15 +430,10 @@ class CSGOAPI(API):
         if not records:
             return None
 
-        def sort_key(i: dict[str, str]) -> str:
-            return i.get('created_on', '')
-        records.sort(key=sort_key, reverse=True)
+        records.sort(key=lambda r: r.created_on, reverse=True)
         record = records[0]
-        map_name = record.get('map_name')
-        if not isinstance(map_name, str):
-            raise APIError('Invalid map name from API PB (not a str)')
         try:
-            api_map = await self.get_map(map_name)
+            api_map = await self.get_map(record.map_name)
         except APIMapError as e:
             raise APIError('Invalid map name from API PB') from e
         pb = _record_to_pb(record, api_map)
@@ -485,16 +462,16 @@ class CSGOAPI(API):
             async with ClientSession() as session:
                 async with session.get(url) as r:
                     if r.status != 200:
-                        raise APIError("Couldn't get global API PBs "
+                        raise APIError("Couldn't get global API ranks "
                                        '(HTTP %d)' % r.status)
-                    results = await r.json()
+                    json = await r.text()
         except ClientError as e:
-            raise APIConnectionError("Couldn't get global API PBs") from e
-        if not isinstance(results, list):
-            raise APIError('Malformed global API ranks (not a list)')
-        if results and not isinstance(results[0], dict):
-            raise APIError('Malformed global API ranks (not a list of dicts)')
-        if not results:
+            raise APIConnectionError("Couldn't get global API ranks") from e
+        try:
+            api_ranks = _APIPlayerRankList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API ranks') from e
+        if not api_ranks:
             try:
                 player_name = await name_for_steamid64(steamid64)
             except SteamError:
@@ -502,14 +479,7 @@ class CSGOAPI(API):
             return Profile(name=player_name, url=player_url, mode=self.mode,
                            rank=Rank.NEW, points=0, average=0)
 
-        info = results[0]
-        points = info.get('points')
-        if not isinstance(points, int):
-            raise APIError('Malformed global API ranks (points not an int)')
-
-        average = info.get('average')
-        if not isinstance(average, float):
-            raise APIError('Malformed global API ranks (average not a float)')
+        api_rank = api_ranks[0]
 
         if self.mode == Mode.VNL:
             thresholds = [(600000, Rank.LEGEND),
@@ -554,8 +524,8 @@ class CSGOAPI(API):
                        (1, Rank.BEGINNER_MINUS)]
         rank = Rank.NEW
         for threshold, rank in thresholds:
-            if points >= threshold:
+            if api_rank.points >= threshold:
                 break
-        return Profile(name=info.get('player_name'), url=player_url,
-                       mode=self.mode, rank=rank, points=points,
-                       average=int(average))
+        return Profile(name=api_rank.player_name, url=player_url,
+                       mode=self.mode, rank=rank, points=api_rank.points,
+                       average=int(api_rank.average))
