@@ -6,9 +6,9 @@ from kzkitty.api.kz.csgo import CSGOAPI, refresh_csgo_db_maps
 from kzkitty.api.kz.cs2 import CS2API, refresh_cs2_db_maps
 from kzkitty.models import Mode
 
-__all__ = ('API', 'APIConnectionError', 'APIError', 'APIMap',
+__all__ = ['API', 'APIConnectionError', 'APIError', 'APIMap',
            'APIMapAmbiguousError', 'APIMapError', 'APIMapNotFoundError',
-           'Rank', 'PersonalBest', 'Profile', 'api_for_mode')
+           'Rank', 'PersonalBest', 'Profile', 'api_for_mode']
 
 async def refresh_db_maps() -> None:
     await refresh_csgo_db_maps()
