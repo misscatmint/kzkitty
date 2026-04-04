@@ -42,7 +42,7 @@ def _formattime(td: timedelta) -> str:
             return n, abs(n) != 1 and 's' or ''
         s = ('%d day%s, ' % plural(td.days)) + s
     if td.microseconds:
-        s = s + '.%06d' % td.microseconds
+        s = s + '.%06d' % round(td.microseconds, -3)
         s = s.rstrip('0').rstrip('.')
     return s
 
