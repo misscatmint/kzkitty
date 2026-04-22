@@ -64,7 +64,7 @@ async def _vnl_tiers() -> dict[int, tuple[int, int]]:
                                    r.status)
                 json = await r.text()
     except ClientError as e:
-        raise APIError("Couldn't get VNL API maps")
+        raise APIError("Couldn't get VNL API maps") from e
     try:
         vnl_maps = _VNLMapList.validate_json(json)
     except ValidationError as e:
