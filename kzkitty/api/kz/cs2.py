@@ -239,7 +239,10 @@ async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
     return records.values[0] if records.values else None
 
 def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
-    steamid64 = _steamid_to_steamid64(record.player.id)
+    try:
+        steamid64 = _steamid_to_steamid64(record.player.id)
+    except ValueError as e:
+        raise APIError('Malformed global API Steam ID') from e
     player_url = _profile_url(steamid64) 
     if record.teleports == 0:
         points = record.pro_points
