@@ -37,9 +37,6 @@ class _APIMap(BaseModel):
 class _APIMapResults(BaseModel):
     values: list[_APIMap]
 
-def _utc_datetime(value: datetime) -> datetime:
-    return value.replace(tzinfo=timezone.utc)
-
 class _APIPlayer(BaseModel):
     id: str
     name: str
