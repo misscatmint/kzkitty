@@ -212,8 +212,10 @@ async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
     if steamid64 is not None:
         params['player'] = str(steamid64)
     if api_map is not None:
+        if api_map.course is None:
+            raise APIError('Map has no course')
         params['map'] = api_map.name
-        params['course'] = api_map.course or 'Main'
+        params['course'] = api_map.course
     if tp_type == Type.TP:
         params['has_teleports'] = 'true'
     elif tp_type == Type.PRO:
