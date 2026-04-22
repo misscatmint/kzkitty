@@ -266,6 +266,9 @@ class CS2API(API):
     @override
     async def get_map(self, name: str, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
+        if bonus is not None:
+            raise APIMapError("Bonuses aren't supported on CS2. "
+                              'Did you mean to specify a course?')
         if not re.fullmatch('[A-za-z0-9_]+', name):
             raise APIMapError('Invalid map name')
 
@@ -282,22 +285,19 @@ class CS2API(API):
                 db_map = db_maps[0]
         if db_map is not None:
             name = db_map.name
+            thumbnail = db_map.thumbnail
 
         if (db_map is not None and
+            db_map.main_course is not None and
             (course is None or course.lower() == db_map.main_course.lower())):
-            if bonus is not None:
-                raise APIMapError("Bonuses aren't supported on CS2. "
-                                  'Did you mean to specify a course?')
-
             course_id = 1
-            course_name = db_map.main_course or 'Main'
+            course_name = db_map.main_course
             if self.mode == Mode.VNL2:
                 tier = db_map.vnl_tier
                 pro_tier = db_map.vnl_pro_tier
             else:
                 tier = db_map.tier
                 pro_tier = db_map.pro_tier
-            thumbnail = db_map.thumbnail
         else:
             json = {}
             url = f'https://api.cs2kz.org/maps/{name}'
@@ -313,22 +313,20 @@ class CS2API(API):
             except ClientError as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
-            if bonus is not None:
-                raise APIMapError("Bonuses aren't supported on CS2. "
-                                  'Did you mean to specify a course?')
-
             try:
                 api_map = _APIMap.model_validate_json(json)
             except ValidationError as e:
                 raise APIError('Malformed global API map') from e
 
             courses = api_map.courses
-            if courses and course is None:
-                course_id = 1
-                course_info = courses[0]
-                course_name = course_info.name
+            if course is None:
+                if courses:
+                    course_id = 1
+                    course_info = courses[0]
+                    course_name = course_info.name
+                else:
+                    raise APIMapError('Map has no courses')
             else:
-                course = course or 'Main'
                 course_id = None
                 course_info = None
                 course_name = None
