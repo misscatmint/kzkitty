@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from aiohttp import ClientError, ClientSession
@@ -26,7 +26,7 @@ async def _get_steam_profile(url: str) -> ElementTree.Element:
         raise SteamError("Couldn't parse Steam profile XML") from e
 
 async def steamid64_for_profile(url: str) -> int:
-    u = urlparse(url)
+    u = urlsplit(url)
     if u.netloc != 'steamcommunity.com':
         raise SteamValueError
 
