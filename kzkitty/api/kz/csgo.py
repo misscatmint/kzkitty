@@ -2,6 +2,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, override
+from urllib.parse import quote, quote_plus, urlencode
 
 from aiohttp import ClientError, ClientSession
 from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
@@ -71,7 +72,7 @@ async def _vnl_tiers() -> dict[int, tuple[int, int]]:
     return {m.id: (m.tpTier, m.proTier) for m in vnl_maps}
 
 async def _vnl_tiers_for_map(name: str) -> tuple[int, int]:
-    url = f'https://vnlkz.com/api/maps/{name}'
+    url = f'https://vnlkz.com/api/maps/{quote(name)}'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -91,7 +92,7 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int, int]:
 
 async def _thumbnail_for_map(name: str) -> bytes | None:
     thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
-                     f'map-images/public/webp/medium/{name}.webp')
+                     f'map-images/public/webp/medium/{quote(name)}.webp')
     thumbnail = None
     try:
         async with ClientSession() as session:
@@ -207,16 +208,17 @@ def _profile_url(steamid64: int, mode: Mode) -> str:
     if mode == Mode.VNL:
         return f'https://vnlkz.com/#/stats/{steamid64}'
     else:
-        return f'https://kzgo.eu/players/{steamid64}?{mode.lower()}'
+        return (f'https://kzgo.eu/players/{steamid64}?'
+                f'{quote_plus(mode.lower())}')
 
 def _map_url(name: str, mode: Mode, stage: int) -> str:
     if stage != 0:
-        return (f'https://kzgo.eu/maps/{name}?{mode.lower()}'
-                f'&bonus={stage}')
+        return (f'https://kzgo.eu/maps/{quote(name)}?'
+                f'{quote_plus(mode.lower())}&bonus={stage}')
     elif mode == Mode.VNL:
-        return f'https://vnlkz.com/#/map/{name}'
+        return f'https://vnlkz.com/#/map/{quote(name)}'
     else:
-        return f'https://kzgo.eu/maps/{name}?{mode.lower()}'
+        return f'https://kzgo.eu/maps/{quote(name)}?{quote_plus(mode.lower())}'
 
 async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  tp_type: Type=Type.ANY,
@@ -225,21 +227,22 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  limit: int | None=None) -> list[_APIRecord]:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
-    url = ('https://kztimerglobal.com/api/v2.0/records/top?'
-           f'steamid64={steamid64}&tickrate=128&'
-           f'modes_list_string={api_mode}')
+    params: dict[str, str] = {'steamid64': str(steamid64), 'tickrate': '128',
+                              'modes_list_string': api_mode}
     if stage is not None:
-        url += f'&stage={stage}'
+        params['stage'] = str(stage)
     if tp_type == Type.TP:
-        url += '&has_teleports=true'
+        params['has_teleports'] = 'true'
     elif tp_type == Type.PRO:
-        url += '&has_teleports=false'
+        params['has_teleports'] = 'false'
     if map_name is not None:
-        url += f'&map_name={map_name}'
+        params['map_name'] = map_name
     if limit is not None:
-        url += f'&limit={limit}'
+        params['limit'] = str(limit)
     else:
-        url += '&limit=9999'
+        params['limit'] = '9999'
+    query = urlencode(params)
+    url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -284,13 +287,14 @@ async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     stage = stage or 0
-    url = ('https://kztimerglobal.com/api/v2.0/records/top'
-           f'?map_name={api_map.name}&stage={stage}&'
-           f'modes_list_string={api_mode}&limit=1')
+    params: dict[str, str] = {'map_name': api_map.name, 'stage': str(stage),
+                              'modes_list_string': api_mode, 'limit': '1'}
     if tp_type == Type.TP:
-        url += '&has_teleports=true'
+        params['has_teleports'] = 'true'
     elif tp_type == Type.PRO:
-        url += '&has_teleports=false'
+        params['has_teleports'] = 'false'
+    query = urlencode(params)
+    url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -337,7 +341,7 @@ class CSGOAPI(API):
             thumbnail = db_map.thumbnail
         else:
             json = {}
-            url = f'https://kztimerglobal.com/api/v2.0/maps/name/{name}'
+            url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
             try:
                 async with ClientSession() as session:
                     async with session.get(url) as r:
@@ -454,10 +458,12 @@ class CSGOAPI(API):
     @override
     async def get_profile(self, steamid64: int) -> Profile:
         player_url = _profile_url(steamid64, self.mode)
-        api_mode_id = {Mode.KZT: 200, Mode.SKZ: 201, Mode.VNL: 202}[self.mode]
-        url = ('https://kztimerglobal.com/api/v2.0/player_ranks?'
-               f'steamid64s={steamid64}&stages=0&mode_ids={api_mode_id}&'
-               'tickrates=128')
+        api_mode_id = {Mode.KZT: '200', Mode.SKZ: '201',
+                       Mode.VNL: '202'}[self.mode]
+        params: dict[str, str] = {'steamid64s': str(steamid64), 'stages': '0',
+                                  'mode_ids': api_mode_id, 'tickrates': '128'}
+        query = urlencode(params)
+        url = f'https://kztimerglobal.com/api/v2.0/player_ranks?{query}'
         try:
             async with ClientSession() as session:
                 async with session.get(url) as r:

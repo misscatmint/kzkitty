@@ -2,6 +2,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import override
+from urllib.parse import quote, urlencode
 
 from aiohttp import ClientError, ClientSession
 from pydantic import BaseModel, ValidationError, UUID7
@@ -69,7 +70,7 @@ class _APIProfile(BaseModel):
 
 async def _thumbnail_for_map(name: str, course_id: int=1) -> bytes | None:
     thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
-                     f'cs2kz-images/public/webp/medium/{name}/'
+                     f'cs2kz-images/public/webp/medium/{quote(name)}/'
                      f'{course_id}.webp')
     thumbnail = None
     try:
@@ -207,21 +208,24 @@ async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
                       api_map: APIMap | None=None,
                       tp_type: Type | None=None) -> _APIRecord | None:
     api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[mode]
-    url = f'https://api.cs2kz.org/records?mode={api_mode_id}&top=true'
+    params: dict[str, str] = {'mode': api_mode_id, 'top': 'true', 'limit': '1'}
     if steamid64 is not None:
-        url += f'&player={steamid64}'
+        params['player'] = str(steamid64)
     if api_map is not None:
-        course = api_map.course or 'Main'
-        url += f'&map={api_map.name}&course={course}&'
+        params['map'] = api_map.name
+        params['course'] = api_map.course or 'Main'
     if tp_type == Type.TP:
-        url += '&has_teleports=true'
+        params['has_teleports'] = 'true'
     elif tp_type == Type.PRO:
-        url += '&has_teleports=false'
+        params['has_teleports'] = 'false'
     if latest:
-        url += '&sort_by=submission-date&sort_order=descending'
+        params['sort_by'] = 'submission-date'
+        params['sort_order'] = 'descending'
     else:
-        url += '&sort_by=time&sort_order=ascending'
-    url += '&limit=1'
+        params['sort_by'] = 'time'
+        params['sort_order'] = 'ascending'
+    query = urlencode(params)
+    url = f'https://api.cs2kz.org/records?{query}'
     try:
         async with ClientSession() as session:
             async with session.get(url) as r:
@@ -303,7 +307,7 @@ class CS2API(API):
                 pro_tier = db_map.pro_tier
         else:
             json = {}
-            url = f'https://api.cs2kz.org/maps/{name}'
+            url = f'https://api.cs2kz.org/maps/{quote(name)}'
             try:
                 async with ClientSession() as session:
                     async with session.get(url) as r:
@@ -352,7 +356,7 @@ class CS2API(API):
         if thumbnail is None:
             thumbnail = await _thumbnail_for_map(name, course_id)
 
-        url = f'https://cs2kz.org/maps/{name}'
+        url = f'https://cs2kz.org/maps/{quote(name)}'
 
         return APIMap(name=name, mode=self.mode, bonus=None,
                       course=course_name, tier=tier, tier_name=tier_name,
