@@ -4,9 +4,9 @@ import asyncio
 import logging
 from typing import Any
 
-from arc import (AutocompleteData, AutodeferMode, GatewayClient,
-                 GatewayContext, IntParams, MemberParams, Option, StrParams,
-                 slash_command)
+from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
+                 IntParams, MemberParams, Option, StrParams, slash_command)
+from arc.abc.client import Client
 from arc.utils import IntervalLoop
 from hikari import GatewayBot, Intents, Member, MessageFlag
 from tortoise.exceptions import DoesNotExist
@@ -40,13 +40,13 @@ def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
     refresh_db_loop = IntervalLoop(refresh_db_maps,
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
-    async def startup(_: GatewayClient) -> None:
+    async def startup(_: Client) -> None:
         await init_db(db_url)
         asyncio.create_task(import_default_players())
         refresh_db_loop.start()
     client.add_startup_hook(startup)
 
-    async def shutdown(_: GatewayClient) -> None:
+    async def shutdown(_: Client) -> None:
         await close_db()
     client.add_shutdown_hook(shutdown)
 
@@ -81,7 +81,7 @@ _BonusParams = IntParams('Bonus', min=1)
 class _PlayerNotFound(Exception):
     pass
 
-async def _get_player(ctx: GatewayContext, player_member: Member | None=None
+async def _get_player(ctx: Context, player_member: Member | None=None
                       ) -> Player:
     """Look up a registered player.
 
@@ -128,7 +128,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
             api_map = await api.get_map(map_name, course, bonus)
     return api, api_map
 
-async def _handle_error(ctx: GatewayContext, exc: Exception) -> None:
+async def _handle_error(ctx: Context, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
 
     SteamError and APIError will still get raised.
@@ -158,7 +158,7 @@ async def _handle_error(ctx: GatewayContext, exc: Exception) -> None:
 
 @slash_command('register', 'Register account',
                autodefer=AutodeferMode.EPHEMERAL)
-async def _slash_register(ctx: GatewayContext,
+async def _slash_register(ctx: Context,
                           profile: Option[str,
                                           StrParams('Steam profile URL')],
                           mode_name: Option[str | None, _ModeParams]=Mode.KZT
@@ -178,14 +178,14 @@ async def _slash_register(ctx: GatewayContext,
         await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('unregister', 'Delete account settings')
-async def _slash_unregister(ctx: GatewayContext) -> None:
+async def _slash_unregister(ctx: Context) -> None:
     """Unregister the user"""
     player = await _get_player(ctx)
     await player.delete()
     await ctx.respond('Unregistered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('mode', 'Show or set default game mode')
-async def _slash_mode(ctx: GatewayContext,
+async def _slash_mode(ctx: Context,
                       mode_name: Option[str | None, _ModeParams]=None
                       ) -> None:
     """Set the user's default game mode"""
@@ -203,7 +203,7 @@ async def _slash_mode(ctx: GatewayContext,
                       flags=MessageFlag.EPHEMERAL)
 
 @slash_command('pb', 'Show personal best times', autodefer=True)
-async def _slash_pb(ctx: GatewayContext,
+async def _slash_pb(ctx: Context,
                     map_name: Option[str, _MapParams],
                     type_name: Option[str, _TypeParams]=Type.ANY,
                     mode_name: Option[str | None, _ModeParams]=None,
@@ -223,7 +223,7 @@ async def _slash_pb(ctx: GatewayContext,
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
-async def _slash_latest(ctx: GatewayContext,
+async def _slash_latest(ctx: Context,
                         type_name: Option[str, _TypeParams]=Type.ANY,
                         mode_name: Option[str | None, _ModeParams]=None,
                         player_member: Option[Member | None,
@@ -242,7 +242,7 @@ async def _slash_latest(ctx: GatewayContext,
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
-async def _slash_map(ctx: GatewayContext,
+async def _slash_map(ctx: Context,
                      map_name: Option[str, _MapParams],
                      mode_name: Option[str | None, _ModeParams]=None,
                      course: Option[str | None, _CourseParams]=None,
@@ -265,7 +265,7 @@ async def _slash_map(ctx: GatewayContext,
 
 @slash_command('profile', 'Show rank, point total, and point average',
                autodefer=True)
-async def _slash_profile(ctx: GatewayContext,
+async def _slash_profile(ctx: Context,
                          mode_name: Option[str | None, _ModeParams]=None,
                          player_member: Option[Member | None,
                                                _PlayerParams]=None
