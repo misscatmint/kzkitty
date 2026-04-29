@@ -5,10 +5,11 @@ import logging
 from typing import Any
 
 from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
-                 IntParams, MemberParams, Option, StrParams, slash_command)
+                 IntParams, MemberParams, Option, RESTClient, StrParams,
+                 slash_command)
 from arc.abc.client import Client
 from arc.utils import IntervalLoop
-from hikari import GatewayBot, Intents, Member, MessageFlag
+from hikari import GatewayBot, Intents, Member, MessageFlag, RESTBot
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
@@ -23,10 +24,8 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 
 _logger = logging.getLogger('kzkitty.bot')
 
-def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
-    """Start the bot's main event loop"""
-    bot = GatewayBot(discord_token, intents=Intents.NONE)
-    client = GatewayClient(bot)
+def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
+    """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
     client.include(_slash_register)
     client.include(_slash_unregister)
@@ -50,7 +49,22 @@ def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
         await close_db()
     client.add_shutdown_hook(shutdown)
 
-    bot.run()
+def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
+    """Start the bot's main event loop (as a gateway bot)"""
+    bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
+                     suppress_optimization_warning=True)
+    client = GatewayClient(bot)
+    _setup(client, db_url, refresh_db_hours)
+    bot.run(check_for_updates=False)
+
+def runrest(host: str, port: int, discord_token: str, db_url: str,
+            refresh_db_hours: int=24) -> None:
+    """Start the bot's main event loop (as a REST bot)"""
+    bot = RESTBot(discord_token, banner=None,
+                  suppress_optimization_warning=True)
+    client = RESTClient(bot)
+    _setup(client, db_url, refresh_db_hours)
+    bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[GatewayClient, str]
                            ) -> list[str]:

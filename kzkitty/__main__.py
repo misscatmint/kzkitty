@@ -4,6 +4,7 @@ import os
 import sys
 
 from kzkitty.api.kz import refresh_db_maps
+from kzkitty.bot import run, runrest
 from kzkitty.models import (close_db, dump_players, export_default_players,
                             init_db)
 
@@ -34,6 +35,7 @@ def main(args: list[str]) -> None:
     discord_token = os.environ['KZKITTY_DISCORD_TOKEN']
     db_url = os.environ['KZKITTY_DB']
     refresh_db_hours = int(os.environ.get('KZKITTY_REFRESH_DB_HOURS', 24))
+    rest = os.environ.get('KZKITTY_REST')
 
     try:
         import uvloop
@@ -57,8 +59,11 @@ def main(args: list[str]) -> None:
             asyncio.run(_dump(db_url))
             return
 
-    from kzkitty.bot import run
-    run(discord_token, db_url, refresh_db_hours)
+    if rest:
+        host, port = rest.split(':', 1)
+        runrest(host, int(port), discord_token, db_url, refresh_db_hours)
+    else:
+        run(discord_token, db_url, refresh_db_hours)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

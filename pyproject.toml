@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "aiohttp[speedups]>=3.13.5",
-    "hikari-arc>=2.2.0",
-    "hikari[speedups]>=2.5.0",
+    "hikari-arc[rest]>=2.2.0",
+    "hikari[server,speedups]>=2.5.0",
     "pydantic>=2.13.3",
     "tortoise-orm>=1.1.7",
     "uvloop>=0.22.1",
@@ -18,3 +18,9 @@ typeCheckingMode = "standard"
 
 [tool.uv]
 exclude-dependencies = ["aiodns"]
+
+[tool.uv.sources]
+hikari = {
+    git = "https://github.com/hikari-py/hikari.git",
+    rev = "222aab1bcd54bba9292d0087271a289a0742a56b"
+}
