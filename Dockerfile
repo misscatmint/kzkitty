@@ -1,5 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.11.3-python3.14-alpine3.23
 ENV PYTHONOPTIMIZE=2 UV_NO_CACHE=1 UV_NO_DEV=1
+RUN apk add --no-cache git
 
 WORKDIR /app
 COPY . /app

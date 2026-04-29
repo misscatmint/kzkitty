@@ -44,6 +44,9 @@ preferred KZ game modes (on a per-Discord server basis).
 `KZKITTY_REFRESH_DB_HOURS` can optionally be used to control how frequently
 the map cache is updated from the global APIs. The default is 24 hours.
 
+Set `KZKITTY_REST` to an `address:port` to run the bot as a REST bot. Note
+that this will require an internet-facing HTTPS server to proxy to kzkitty.
+
 ## Deployment
 
 To deploy with Docker Compose, use a `compose.yaml` file:
