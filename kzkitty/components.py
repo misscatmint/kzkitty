@@ -12,10 +12,12 @@ from kzkitty.models import Player
 
 _logger = logging.getLogger('kzkitty.components')
 
-async def _player_container(player: Player, accent_color: Color, body: str):
+async def _player_container(player: Player, accent_color: Color, body: str,
+                            avatar_timeout: int | None=None):
     container = ContainerComponentBuilder(accent_color=accent_color)
     try:
-        avatar_url = await avatar_url_for_steamid64(player.steamid64)
+        avatar_url = await avatar_url_for_steamid64(player.steamid64,
+                                                    timeout=avatar_timeout)
     except SteamError:
         _logger.exception("Couldn't get player avatar")
         avatar_url = None
@@ -83,7 +85,8 @@ def _map_info(api_map: APIMap, pro: bool | None=None) -> str:
 **Tier**: (unknown)"""
     return extra
 
-async def pb_component(pb: PersonalBest, player: Player, user: User
+async def pb_component(pb: PersonalBest, player: Player, user: User,
+                       avatar_timeout: int | None=None
                        ) -> ContainerComponentBuilder:
     player_name = pb.player_name or user.display_name
     map_info = _map_info(pb.map, pb.teleports == 0)
@@ -129,14 +132,16 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
         accent_color = Color(0x1e90ff)
     else:
         accent_color = Color(0xffa500)
-    container = await _player_container(player, accent_color, body)
+    container = await _player_container(player, accent_color, body,
+                                        avatar_timeout=avatar_timeout)
     gallery = MediaGalleryComponentBuilder()
     gallery.add_media_gallery_item(pb.map.thumbnail_url)
     container.add_component(gallery)
     container.add_text_display(f'-# <t:{int(pb.date.timestamp())}>')
     return container
 
-async def profile_component(profile: Profile, player: Player, user: User
+async def profile_component(profile: Profile, player: Player, user: User,
+                            avatar_timeout: int | None=None
                             ) -> ContainerComponentBuilder:
     name = profile.name or user.display_name
     colors = {Rank.BEGINNER_MINUS: 0xffffff,
@@ -171,7 +176,8 @@ async def profile_component(profile: Profile, player: Player, user: User
     if profile.average is not None:
         body += f"""**Average**: {profile.average}
 """
-    return await _player_container(player, accent_color, body)
+    return await _player_container(player, accent_color, body, 
+                                   avatar_timeout=avatar_timeout)
 
 def _wr_time(pb: PersonalBest) -> str:
     player_name = pb.player_name or '(unknown)'

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import override
 from urllib.parse import quote, urlencode
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
 
@@ -179,8 +179,8 @@ def _profile_url(steamid64: int) -> str:
     return f'https://cs2kz.org/profile/{steamid64}'
 
 async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
-                      api_map: APIMap | None=None,
-                      tp_type: Type | None=None) -> _APIRecord | None:
+                      api_map: APIMap | None=None, tp_type: Type | None=None,
+                      timeout: int | None=None) -> _APIRecord | None:
     api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[mode]
     params: dict[str, str] = {'mode': api_mode_id, 'top': 'true', 'limit': '1'}
     if steamid64 is not None:
@@ -202,8 +202,9 @@ async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
         params['sort_order'] = 'ascending'
     query = urlencode(params)
     url = f'https://api.cs2kz.org/records?{query}'
+    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
     try:
-        async with ClientSession() as session:
+        async with ClientSession(timeout=ctimeout) as session:
             async with session.get(url) as r:
                 if r.status != 200:
                     raise APIError("Couldn't get global API PBs (HTTP %d)" %
@@ -282,8 +283,10 @@ class CS2API(API):
         else:
             json = {}
             url = f'https://api.cs2kz.org/maps/{quote(name)}'
+            ctimeout = (ClientTimeout(total=self.timeout)
+                        if self.timeout is not None else None)
             try:
-                async with ClientSession() as session:
+                async with ClientSession(timeout=ctimeout) as session:
                     async with session.get(url) as r:
                         if r.status == 404:
                             raise APIMapNotFoundError('Map not found')
@@ -341,7 +344,8 @@ class CS2API(API):
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
         record = await _top_record(self.mode, steamid64=steamid64,
-                                   api_map=api_map, tp_type=tp_type)
+                                   api_map=api_map, tp_type=tp_type,
+                                   timeout=self.timeout)
         if record is None:
             return None
         return _record_to_pb(record, api_map)
@@ -350,7 +354,7 @@ class CS2API(API):
     async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
                          ) -> PersonalBest | None:
         record = await _top_record(self.mode, steamid64=steamid64,
-                                   tp_type=tp_type)
+                                   tp_type=tp_type, timeout=self.timeout)
         if record is None:
             return None
         api_map = await self.get_map(record.map.name, record.course.name)
@@ -358,7 +362,8 @@ class CS2API(API):
 
     @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
-        record = await _top_record(self.mode, api_map=api_map, latest=False)
+        record = await _top_record(self.mode, api_map=api_map, latest=False,
+                                   timeout=self.timeout)
         if record is None:
             return []
         pbs = [_record_to_pb(record, api_map)]
@@ -366,7 +371,8 @@ class CS2API(API):
         if pro_rank is not None:
             return pbs
         pro_record = await _top_record(self.mode, api_map=api_map,
-                                       tp_type=Type.PRO, latest=False)
+                                       tp_type=Type.PRO, latest=False,
+                                       timeout=self.timeout)
         if pro_record is not None:
             pbs.append(_record_to_pb(pro_record, api_map))
         return pbs
@@ -375,14 +381,17 @@ class CS2API(API):
     async def get_profile(self, steamid64: int) -> Profile:
         player_url = _profile_url(steamid64)
         url = f'https://api.cs2kz.org/players/{steamid64}'
+        ctimeout = (ClientTimeout(total=self.timeout)
+                    if self.timeout is not None else None)
         try:
-            async with ClientSession() as session:
+            async with ClientSession(timeout=ctimeout) as session:
                 async with session.get(url) as r:
                     if r.status == 200:
                         json = await r.text()
                     elif r.status == 404:
                         try:
-                            player_name = await name_for_steamid64(steamid64)
+                            player_name = await name_for_steamid64(
+                                steamid64, timeout=self.timeout)
                         except SteamError:
                             player_name = None
                         return Profile(name=player_name, url=player_url,

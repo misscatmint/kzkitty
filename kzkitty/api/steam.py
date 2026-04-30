@@ -1,7 +1,7 @@
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 class SteamError(Exception):
     pass
@@ -9,9 +9,11 @@ class SteamError(Exception):
 class SteamValueError(SteamError):
     pass
 
-async def _get_steam_profile(url: str) -> ElementTree.Element:
+async def _get_steam_profile(url: str, timeout: int | None=None
+                             ) -> ElementTree.Element:
+    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
     try:
-        async with ClientSession() as session:
+        async with ClientSession(timeout=ctimeout) as session:
             async with session.get(url) as r:
                 if r.status != 200 or r.content_type != 'text/xml':
                     raise SteamError("Couldn't get Steam profile (HTTP %d)"
@@ -25,13 +27,13 @@ async def _get_steam_profile(url: str) -> ElementTree.Element:
     except ElementTree.ParseError as e:
         raise SteamError("Couldn't parse Steam profile XML") from e
 
-async def steamid64_for_profile(url: str) -> int:
+async def steamid64_for_profile(url: str, timeout: int | None=None) -> int:
     u = urlsplit(url)
     if u.netloc != 'steamcommunity.com':
         raise SteamValueError
 
     url = f'https://steamcommunity.com{u.path}?xml=1'
-    xml = await _get_steam_profile(url)
+    xml = await _get_steam_profile(url, timeout=timeout)
     steamid64 = xml.find('steamID64')
     if steamid64 is None or steamid64.text is None:
         raise SteamError('Malformed Steam profile XML (no steamid64)')
@@ -40,17 +42,18 @@ async def steamid64_for_profile(url: str) -> int:
     except ValueError as e:
         raise SteamError('Malformed Steam profile XML (bad steamid64)') from e
 
-async def avatar_url_for_steamid64(steamid64: int) -> str:
+async def avatar_url_for_steamid64(steamid64: int, timeout: int | None=None
+                                   ) -> str:
     url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
-    xml = await _get_steam_profile(url)
+    xml = await _get_steam_profile(url, timeout=timeout)
     avatar = xml.find('avatarFull')
     if avatar is None or avatar.text is None:
         raise SteamError('Malformed Steam profile XML (no avatar)')
     return avatar.text
 
-async def name_for_steamid64(steamid64: int) -> str:
+async def name_for_steamid64(steamid64: int, timeout: int | None=None) -> str:
     url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
-    xml = await _get_steam_profile(url)
+    xml = await _get_steam_profile(url, timeout=timeout)
     steam_id = xml.find('steamID')
     if steam_id is None or steam_id.text is None:
         raise SteamError('Malformed Steam profile XML (no steamID)')
