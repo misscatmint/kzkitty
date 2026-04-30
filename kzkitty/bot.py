@@ -24,6 +24,8 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 
 _logger = logging.getLogger('kzkitty.bot')
 
+_API_TIMEOUT = 5
+
 def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
@@ -115,7 +117,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     If the user hasn't explicitly chosen a specific mode, this will fall back
     to looking up the map for both CS:GO and CS2.
     """
-    api = api_for_mode(mode)
+    api = api_for_mode(mode, timeout=_API_TIMEOUT)
     try:
         api_map = await api.get_map(map_name, course, bonus)
     except (APIConnectionError, APIMapNotFoundError) as e:
@@ -128,7 +130,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                 Mode.VNL2: Mode.VNL}[mode]
         if isinstance(e, APIConnectionError):
             _logger.exception('API connection failure during map lookup')
-        api = api_for_mode(mode)
+        api = api_for_mode(mode, timeout=_API_TIMEOUT)
         api_map = await api.get_map(map_name, course, bonus)
     else:
         # If the player has their mode set to VNL and they do /map on
@@ -137,7 +139,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
         if (bonus is None and mode_name is None and
             mode in {Mode.VNL, Mode.VNL2} and api_map.tier == 10):
             mode = Mode.KZT if mode == Mode.VNL else Mode.CKZ
-            api = api_for_mode(mode)
+            api = api_for_mode(mode, timeout=_API_TIMEOUT)
             api_map = await api.get_map(map_name, course, bonus)
     return api, api_map
 
@@ -178,7 +180,7 @@ async def _slash_register(ctx: Context,
                           ) -> None:
     """Register the user with a given Steam profile and game mode"""
     try:
-        steamid64 = await steamid64_for_profile(profile)
+        steamid64 = await steamid64_for_profile(profile, timeout=_API_TIMEOUT)
     except SteamValueError:
         await ctx.respond('Invalid Steam profile URL',
                           flags=MessageFlag.EPHEMERAL)
@@ -232,7 +234,8 @@ async def _slash_pb(ctx: Context,
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
-    component = await pb_component(pb, player, ctx.user)
+    component = await pb_component(pb, player, ctx.user,
+                                   avatar_timeout=_API_TIMEOUT)
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
@@ -245,13 +248,14 @@ async def _slash_latest(ctx: Context,
     """Look up the user's latest personal best for a given game mode"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    api = api_for_mode(mode)
+    api = api_for_mode(mode, timeout=_API_TIMEOUT)
     pb = await api.get_latest(player.steamid64, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
 
-    component = await pb_component(pb, player, ctx.user)
+    component = await pb_component(pb, player, ctx.user,
+                                   avatar_timeout=_API_TIMEOUT)
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
@@ -286,7 +290,8 @@ async def _slash_profile(ctx: Context,
     """Look up the user's profile information"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    api = api_for_mode(mode)
+    api = api_for_mode(mode, timeout=_API_TIMEOUT)
     profile = await api.get_profile(player.steamid64)
-    component = await profile_component(profile, player, ctx.user)
+    component = await profile_component(profile, player, ctx.user,
+                                        avatar_timeout=_API_TIMEOUT)
     await ctx.respond(component=component)

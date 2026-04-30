@@ -14,8 +14,8 @@ async def refresh_db_maps() -> None:
     await refresh_csgo_db_maps()
     await refresh_cs2_db_maps()
 
-def api_for_mode(mode: Mode) -> API:
+def api_for_mode(mode: Mode, timeout: int | None=None) -> API:
     if mode in {Mode.KZT, Mode.SKZ, Mode.VNL}:
-        return CSGOAPI(mode)
+        return CSGOAPI(mode, timeout=timeout)
     else:
-        return CS2API(mode)
+        return CS2API(mode, timeout=timeout)

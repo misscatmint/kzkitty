@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
 from tortoise.exceptions import DoesNotExist
 
@@ -202,7 +202,9 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  tp_type: Type=Type.ANY,
                                  map_name: str | None=None,
                                  stage: int | None=None,
-                                 limit: int | None=None) -> list[_APIRecord]:
+                                 limit: int | None=None,
+                                 timeout: int | None=None
+                                 ) -> list[_APIRecord]:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     params: dict[str, str] = {'steamid64': str(steamid64), 'tickrate': '128',
@@ -221,8 +223,9 @@ async def _records_for_steamid64(steamid64: int, mode: Mode,
         params['limit'] = '9999'
     query = urlencode(params)
     url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
+    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
     try:
-        async with ClientSession() as session:
+        async with ClientSession(timeout=ctimeout) as session:
             async with session.get(url) as r:
                 if r.status != 200:
                     raise APIError("Couldn't get global API PBs (HTTP %d)" %
@@ -244,10 +247,11 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
                         teleports=record.teleports, points=record.points,
                         point_scale=1000, place=None, date=record.created_on)
 
-async def _place_for_pb(pb: PersonalBest) -> int:
+async def _place_for_pb(pb: PersonalBest, timeout: int | None=None) -> int:
     url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
+    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
     try:
-        async with ClientSession() as session:
+        async with ClientSession(timeout=ctimeout) as session:
             async with session.get(url) as r:
                 if r.status != 200:
                     raise APIError("Couldn't get global API PB place "
@@ -261,7 +265,8 @@ async def _place_for_pb(pb: PersonalBest) -> int:
         raise APIError('Malformed global API place') from e
 
 async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
-                          stage: int | None=None) -> _APIRecord | None:
+                          stage: int | None=None, timeout: int | None=None
+                          ) -> _APIRecord | None:
     api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
                 Mode.VNL: 'kz_vanilla'}[mode]
     stage = stage or 0
@@ -273,8 +278,9 @@ async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
         params['has_teleports'] = 'false'
     query = urlencode(params)
     url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
+    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
     try:
-        async with ClientSession() as session:
+        async with ClientSession(timeout=ctimeout) as session:
             async with session.get(url) as r:
                 if r.status != 200:
                     raise APIError("Couldn't get global API WR "
@@ -319,8 +325,10 @@ class CSGOAPI(API):
         else:
             json = {}
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
+            ctimeout = (ClientTimeout(total=self.timeout)
+                        if self.timeout is not None else None)
             try:
-                async with ClientSession() as session:
+                async with ClientSession(timeout=ctimeout) as session:
                     async with session.get(url) as r:
                         if r.status != 200:
                             raise APIError("Couldn't get global API map "
@@ -375,7 +383,7 @@ class CSGOAPI(API):
         records = await _records_for_steamid64(steamid64, self.mode,
                                                map_name=api_map.name,
                                                stage=api_map.bonus or 0,
-                                               limit=2)
+                                               limit=2, timeout=self.timeout)
         pbs = [_record_to_pb(record, api_map) for record in records]
         if not pbs:
             return None
@@ -387,7 +395,7 @@ class CSGOAPI(API):
         pbs.sort(key=lambda pb: pb.time)
         pb = pbs[0]
         try:
-            pb.place = await _place_for_pb(pb)
+            pb.place = await _place_for_pb(pb, timeout=self.timeout)
         except APIError:
             _logger.exception("Couldn't get global API PB place")
         return pbs[0]
@@ -397,12 +405,14 @@ class CSGOAPI(API):
                          ) -> PersonalBest | None:
         if tp_type in {Type.TP, Type.ANY}:
             records = await _records_for_steamid64(steamid64, self.mode,
-                                                   stage=0, tp_type=Type.TP)
+                                                   stage=0, tp_type=Type.TP,
+                                                   timeout=self.timeout)
         else:
             records = []
         if tp_type in {Type.PRO, Type.ANY}:
             pros = await _records_for_steamid64(steamid64, self.mode,
-                                                stage=0, tp_type=Type.PRO)
+                                                stage=0, tp_type=Type.PRO,
+                                                timeout=self.timeout)
         else:
             pros = []
         records += pros
@@ -417,7 +427,7 @@ class CSGOAPI(API):
             raise APIError('Invalid map name from API PB') from e
         pb = _record_to_pb(record, api_map)
         try:
-            pb.place = await _place_for_pb(pb)
+            pb.place = await _place_for_pb(pb, timeout=self.timeout)
         except APIError:
             _logger.exception("Couldn't get global API PB place")
         return pb
@@ -439,8 +449,10 @@ class CSGOAPI(API):
                                   'mode_ids': api_mode_id, 'tickrates': '128'}
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/player_ranks?{query}'
+        ctimeout = (ClientTimeout(total=self.timeout)
+                    if self.timeout is not None else None)
         try:
-            async with ClientSession() as session:
+            async with ClientSession(timeout=ctimeout) as session:
                 async with session.get(url) as r:
                     if r.status != 200:
                         raise APIError("Couldn't get global API ranks "
@@ -454,7 +466,8 @@ class CSGOAPI(API):
             raise APIError('Malformed global API ranks') from e
         if not api_ranks:
             try:
-                player_name = await name_for_steamid64(steamid64)
+                player_name = await name_for_steamid64(steamid64,
+                                                       timeout=self.timeout)
             except SteamError:
                 player_name = None
             return Profile(name=player_name, url=player_url, mode=self.mode,

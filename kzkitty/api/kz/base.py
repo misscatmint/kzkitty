@@ -86,8 +86,9 @@ class Profile:
     url: str
 
 class API(ABC):
-    def __init__(self, mode: Mode) -> None:
+    def __init__(self, mode: Mode, timeout: int | None=None) -> None:
         self.mode: Mode = mode
+        self.timeout: int | None = None
 
     @abstractmethod
     def has_tp_wrs(self) -> bool:
