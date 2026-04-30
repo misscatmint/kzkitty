@@ -7,7 +7,7 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
-from kzkitty.api.steam import SteamError, avatar_for_steamid64
+from kzkitty.api.steam import SteamError, avatar_url_for_steamid64
 from kzkitty.models import Player
 
 _logger = logging.getLogger('kzkitty.components')
@@ -15,12 +15,12 @@ _logger = logging.getLogger('kzkitty.components')
 async def _player_container(player: Player, accent_color: Color, body: str):
     container = ContainerComponentBuilder(accent_color=accent_color)
     try:
-        avatar = await avatar_for_steamid64(player.steamid64)
+        avatar_url = await avatar_url_for_steamid64(player.steamid64)
     except SteamError:
         _logger.exception("Couldn't get player avatar")
-        avatar = None
-    if avatar is not None:
-        thumbnail = ThumbnailComponentBuilder(media=avatar)
+        avatar_url = None
+    if avatar_url is not None:
+        thumbnail = ThumbnailComponentBuilder(media=avatar_url)
         section = SectionComponentBuilder(accessory=thumbnail)
         section.add_text_display(body)
         container.add_component(section)
@@ -130,10 +130,9 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
     else:
         accent_color = Color(0xffa500)
     container = await _player_container(player, accent_color, body)
-    if pb.map.thumbnail is not None:
-        gallery = MediaGalleryComponentBuilder()
-        gallery.add_media_gallery_item(pb.map.thumbnail)
-        container.add_component(gallery)
+    gallery = MediaGalleryComponentBuilder()
+    gallery.add_media_gallery_item(pb.map.thumbnail_url)
+    container.add_component(gallery)
     container.add_text_display(f'-# <t:{int(pb.date.timestamp())}>')
     return container
 
@@ -218,8 +217,7 @@ async def map_component(api_map: APIMap, wrs: list[PersonalBest],
     accent_color = Color(_map_color(api_map))
     container = ContainerComponentBuilder(accent_color=accent_color)
     container.add_text_display(body)
-    if api_map.thumbnail is not None:
-        gallery = MediaGalleryComponentBuilder()
-        gallery.add_media_gallery_item(api_map.thumbnail)
-        container.add_component(gallery)
+    gallery = MediaGalleryComponentBuilder()
+    gallery.add_media_gallery_item(api_map.thumbnail_url)
+    container.add_component(gallery)
     return container

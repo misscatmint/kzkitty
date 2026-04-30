@@ -68,23 +68,6 @@ class _APIProfile(BaseModel):
     ckz_rating: float
     vnl_rating: float
 
-async def _thumbnail_for_map(name: str, course_id: int=1) -> bytes | None:
-    thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
-                     f'cs2kz-images/public/webp/medium/{quote(name)}/'
-                     f'{course_id}.webp')
-    thumbnail = None
-    try:
-        async with ClientSession() as session:
-            async with session.get(thumbnail_url) as r:
-                if r.status == 200:
-                    thumbnail = await r.content.read()
-                else:
-                    _logger.error("Couldn't get map thumbnail (HTTP %d)",
-                                  r.status)
-    except ClientError:
-        _logger.exception("Couldn't get map thumbnail")
-    return thumbnail
-
 def _tier_num(name: str) -> int | None:
     return {'very-easy': 1, 'easy': 2, 'medium': 3, 'advanced': 4,
             'hard': 5, 'very-hard': 6, 'extreme': 7, 'death': 8,
@@ -143,17 +126,12 @@ async def refresh_cs2_db_maps() -> None:
         try:
             db_map = await Map.get(map_id=api_map.id, is_cs2=True)
         except DoesNotExist:
-            _logger.info('Downloading thumbnail for map %s', api_map.name)
-            thumbnail = await _thumbnail_for_map(api_map.name)
             await Map(map_id=api_map.id, is_cs2=True, name=api_map.name,
                       tier=tier, pro_tier=pro_tier, vnl_tier=vnl_tier,
-                      vnl_pro_tier=vnl_pro_tier, main_course=course_name,
-                      thumbnail=thumbnail).save()
+                      vnl_pro_tier=vnl_pro_tier,
+                      main_course=course_name).save()
             new += 1
         else:
-            thumbnail = db_map.thumbnail
-            if thumbnail is None:
-                thumbnail = await _thumbnail_for_map(api_map.name)
             changed = False
             if db_map.name != api_map.name:
                 _logger.info('Updating name for map %s', api_map.name)
@@ -179,10 +157,6 @@ async def refresh_cs2_db_maps() -> None:
                 vnl_pro_tier is not None):
                 _logger.info('Updating VNL pro tier for map %s', api_map.name)
                 db_map.vnl_pro_tier = vnl_pro_tier
-                changed = True
-            if db_map.thumbnail != thumbnail and thumbnail is not None:
-                _logger.info('Updating thumbnail for map %s', api_map.name)
-                db_map.thumbnail = thumbnail
                 changed = True
             if changed:
                 await db_map.save()
@@ -282,7 +256,6 @@ class CS2API(API):
             raise APIMapError('Invalid map name')
 
         db_map = None
-        thumbnail = None
         try:
             db_map = await Map.get(name__iexact=name, is_cs2=True)
         except DoesNotExist:
@@ -294,7 +267,6 @@ class CS2API(API):
                 db_map = db_maps[0]
         if db_map is not None:
             name = db_map.name
-            thumbnail = db_map.thumbnail
 
         if (db_map is not None and
             db_map.main_course is not None and
@@ -355,15 +327,15 @@ class CS2API(API):
         tier_name = _tier_name(tier)
         pro_tier_name = _tier_name(pro_tier)
 
-        if thumbnail is None:
-            thumbnail = await _thumbnail_for_map(name, course_id)
-
         url = f'https://cs2kz.org/maps/{quote(name)}'
+        thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
+                         'cs2kz-images/public/webp/medium/'
+                         f'{quote(name)}/{course_id}.webp')
 
         return APIMap(name=name, mode=self.mode, bonus=None,
                       course=course_name, tier=tier, tier_name=tier_name,
                       pro_tier=tier, pro_tier_name=pro_tier_name, max_tier=7,
-                      thumbnail=thumbnail, url=url)
+                      thumbnail_url=thumbnail_url, url=url)
 
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,

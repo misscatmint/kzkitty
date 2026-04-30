@@ -90,22 +90,6 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int, int]:
         raise APIError('Malformed VNL API map') from e
     return vnl_map.tpTier, vnl_map.proTier
 
-async def _thumbnail_for_map(name: str) -> bytes | None:
-    thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
-                     f'map-images/public/webp/medium/{quote(name)}.webp')
-    thumbnail = None
-    try:
-        async with ClientSession() as session:
-            async with session.get(thumbnail_url) as r:
-                if r.status == 200:
-                    thumbnail = await r.content.read()
-                else:
-                    _logger.error("Couldn't get map thumbnail (HTTP %d)",
-                                  r.status)
-    except ClientError:
-        _logger.exception("Couldn't get map thumbnail")
-    return thumbnail
-
 async def refresh_csgo_db_maps() -> None:
     _logger.info('Downloading CSGO map tiers')
     url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
@@ -155,17 +139,11 @@ async def refresh_csgo_db_maps() -> None:
         try:
             db_map = await Map.get(map_id=api_map.id, is_cs2=False)
         except DoesNotExist:
-            _logger.info('Downloading thumbnail for map %s', api_map.name)
-            thumbnail = await _thumbnail_for_map(api_map.name)
             await Map(map_id=api_map.id, is_cs2=False, name=api_map.name,
                       tier=api_map.difficulty, pro_tier=api_map.difficulty,
-                      vnl_tier=vnl_tier, vnl_pro_tier=vnl_pro_tier,
-                      thumbnail=thumbnail).save()
+                      vnl_tier=vnl_tier, vnl_pro_tier=vnl_pro_tier).save()
             new += 1
         else:
-            thumbnail = db_map.thumbnail
-            if thumbnail is None:
-                thumbnail = await _thumbnail_for_map(api_map.name)
             changed = False
             if db_map.name != api_map.name:
                 _logger.info('Updating name for map %s', api_map.name)
@@ -183,10 +161,6 @@ async def refresh_csgo_db_maps() -> None:
                 vnl_pro_tier is not None):
                 _logger.info('Updating VNL pro tier for map %s', api_map.name)
                 db_map.vnl_pro_tier = vnl_pro_tier
-                changed = True
-            if db_map.thumbnail != thumbnail and thumbnail is not None:
-                _logger.info('Updating thumbnail for map %s', api_map.name)
-                db_map.thumbnail = thumbnail
                 changed = True
             if changed:
                 await db_map.save()
@@ -219,6 +193,10 @@ def _map_url(name: str, mode: Mode, stage: int) -> str:
         return f'https://vnlkz.com/#/map/{quote(name)}'
     else:
         return f'https://kzgo.eu/maps/{quote(name)}?{quote_plus(mode.lower())}'
+
+def _thumbnail_url(name: str) -> str:
+    return ('https://raw.githubusercontent.com/KZGlobalTeam/map-images/'
+            f'public/webp/medium/{quote(name)}.webp')
 
 async def _records_for_steamid64(steamid64: int, mode: Mode,
                                  tp_type: Type=Type.ANY,
@@ -338,7 +316,6 @@ class CSGOAPI(API):
             pro_tier = db_map.pro_tier
             vnl_tier = db_map.vnl_tier
             vnl_pro_tier = db_map.vnl_pro_tier
-            thumbnail = db_map.thumbnail
         else:
             json = {}
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
@@ -360,7 +337,7 @@ class CSGOAPI(API):
                 raise APIMapNotFoundError('Map not found')
             name = api_map.name
             tier = pro_tier = api_map.difficulty
-            vnl_tier = vnl_pro_tier = thumbnail = None
+            vnl_tier = vnl_pro_tier = None
 
         if course is not None:
             raise APIMapError("Courses aren't supported on CS:GO. "
@@ -385,15 +362,13 @@ class CSGOAPI(API):
             tier_name = _tier_name(tier, self.mode)
             pro_tier_name = _tier_name(pro_tier, self.mode)
 
-        if thumbnail is None:
-            thumbnail = await _thumbnail_for_map(name)
-
         url = _map_url(name, self.mode, bonus or 0)
+        thumbnail_url = _thumbnail_url(name)
 
         return APIMap(name=name, mode=self.mode, bonus=bonus or None,
                       course=None, tier=tier, tier_name=tier_name,
                       pro_tier=pro_tier, pro_tier_name=pro_tier_name,
-                      max_tier=max_tier, thumbnail=thumbnail, url=url)
+                      max_tier=max_tier, url=url, thumbnail_url=thumbnail_url)
 
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:

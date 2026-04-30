@@ -33,8 +33,8 @@ class APIMap:
     pro_tier: int | None
     pro_tier_name: str | None
     max_tier: int | None
-    thumbnail: bytes | None
     url: str
+    thumbnail_url: str
 
 @dataclass
 class PersonalBest:
