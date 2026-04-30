@@ -66,8 +66,7 @@ def runrest(host: str, port: int, discord_token: str, db_url: str,
     _setup(client, db_url, refresh_db_hours)
     bot.run(host=host, port=port, check_for_updates=False)
 
-async def _autocomplete_map(data: AutocompleteData[GatewayClient, str]
-                           ) -> list[str]:
+async def _autocomplete_map(data: AutocompleteData[Client, str]) -> list[str]:
     """Autocomplete map names for slash commands"""
     if not data.focused_value:
         return []
