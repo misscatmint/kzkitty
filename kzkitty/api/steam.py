@@ -40,22 +40,13 @@ async def steamid64_for_profile(url: str) -> int:
     except ValueError as e:
         raise SteamError('Malformed Steam profile XML (bad steamid64)') from e
 
-async def avatar_for_steamid64(steamid64: int) -> bytes:
+async def avatar_url_for_steamid64(steamid64: int) -> str:
     url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
     xml = await _get_steam_profile(url)
     avatar = xml.find('avatarFull')
     if avatar is None or avatar.text is None:
         raise SteamError('Malformed Steam profile XML (no avatar)')
-
-    try:
-        async with ClientSession() as session:
-            async with session.get(avatar.text) as r:
-                if r.status != 200:
-                    raise SteamError("Couldn't get Steam avatar (HTTP %d)"
-                                     % r.status)
-                return await r.content.read()
-    except ClientError as e:
-        raise SteamError("Couldn't get Steam avatar") from e
+    return avatar.text
 
 async def name_for_steamid64(steamid64: int) -> str:
     url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
