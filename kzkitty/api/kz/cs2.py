@@ -85,7 +85,7 @@ def _tier_name(tier: int | None) -> str:
             9: 'Unfeasible', 10: 'Impossible'}.get(tier or -1, 'Unknown')
 
 async def refresh_cs2_db_maps() -> None:
-    _logger.info('Downloading CS2 map tiers')
+    _logger.info('Downloading CS2 map info')
     url = 'https://api.cs2kz.org/maps'
     try:
         async with ClientSession() as session:
