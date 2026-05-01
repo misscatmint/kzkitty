@@ -7,6 +7,7 @@ from urllib.parse import quote, quote_plus, urlencode
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
 from tortoise.exceptions import DoesNotExist
+from tortoise.transactions import in_transaction
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
@@ -91,7 +92,7 @@ async def _vnl_tiers_for_map(name: str) -> tuple[int, int]:
     return vnl_map.tpTier, vnl_map.proTier
 
 async def refresh_csgo_db_maps() -> None:
-    _logger.info('Downloading CSGO map tiers')
+    _logger.info('Downloading CSGO map info')
     url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
     try:
         async with ClientSession() as session:
@@ -122,49 +123,52 @@ async def refresh_csgo_db_maps() -> None:
     updated = 0
     deleted = 0
     for api_map in api_maps:
-        if not api_map.validated:
+        async with in_transaction():
+            if not api_map.validated:
+                try:
+                    db_map = await Map.get(map_id=api_map.id, is_cs2=False)
+                except DoesNotExist:
+                    pass
+                else:
+                    await db_map.delete()
+                    deleted += 1
+                continue
+
+            if vnl_tiers is not None:
+                vnl_tier, vnl_pro_tier = vnl_tiers.get(api_map.id, (10, 10))
+            else:
+                vnl_tier = vnl_pro_tier = None
             try:
                 db_map = await Map.get(map_id=api_map.id, is_cs2=False)
             except DoesNotExist:
-                pass
+                await Map(map_id=api_map.id, is_cs2=False, name=api_map.name,
+                          tier=api_map.difficulty,
+                          pro_tier=api_map.difficulty, vnl_tier=vnl_tier,
+                          vnl_pro_tier=vnl_pro_tier).save()
+                new += 1
             else:
-                await db_map.delete()
-                deleted += 1
-            continue
-
-        if vnl_tiers is not None:
-            vnl_tier, vnl_pro_tier = vnl_tiers.get(api_map.id, (10, 10))
-        else:
-            vnl_tier = vnl_pro_tier = None
-        try:
-            db_map = await Map.get(map_id=api_map.id, is_cs2=False)
-        except DoesNotExist:
-            await Map(map_id=api_map.id, is_cs2=False, name=api_map.name,
-                      tier=api_map.difficulty, pro_tier=api_map.difficulty,
-                      vnl_tier=vnl_tier, vnl_pro_tier=vnl_pro_tier).save()
-            new += 1
-        else:
-            changed = False
-            if db_map.name != api_map.name:
-                _logger.info('Updating name for map %s', api_map.name)
-                db_map.name = api_map.name
-                changed = True
-            if db_map.tier != api_map.difficulty:
-                _logger.info('Updating tier for map %s', api_map.name)
-                db_map.tier = db_map.pro_tier = api_map.difficulty
-                changed = True
-            if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                _logger.info('Updating VNL tier for map %s', api_map.name)
-                db_map.vnl_tier = vnl_tier
-                changed = True
-            if (db_map.vnl_pro_tier != vnl_pro_tier and
-                vnl_pro_tier is not None):
-                _logger.info('Updating VNL pro tier for map %s', api_map.name)
-                db_map.vnl_pro_tier = vnl_pro_tier
-                changed = True
-            if changed:
-                await db_map.save()
-                updated += 1
+                changed = False
+                if db_map.name != api_map.name:
+                    _logger.info('Updating name for map %s', api_map.name)
+                    db_map.name = api_map.name
+                    changed = True
+                if db_map.tier != api_map.difficulty:
+                    _logger.info('Updating tier for map %s', api_map.name)
+                    db_map.tier = db_map.pro_tier = api_map.difficulty
+                    changed = True
+                if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
+                    _logger.info('Updating VNL tier for map %s', api_map.name)
+                    db_map.vnl_tier = vnl_tier
+                    changed = True
+                if (db_map.vnl_pro_tier != vnl_pro_tier and
+                    vnl_pro_tier is not None):
+                    _logger.info('Updating VNL pro tier for map %s',
+                                 api_map.name)
+                    db_map.vnl_pro_tier = vnl_pro_tier
+                    changed = True
+                if changed:
+                    await db_map.save()
+                    updated += 1
     _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
                  new, updated, deleted)
 

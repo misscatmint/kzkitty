@@ -7,6 +7,7 @@ from urllib.parse import quote, urlencode
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
+from tortoise.transactions import in_transaction
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
@@ -103,64 +104,66 @@ async def refresh_cs2_db_maps() -> None:
     updated = 0
     deleted = 0
     for api_map in results.values:
-        if api_map.state != 'approved':
+        async with in_transaction():
+            if api_map.state != 'approved':
+                try:
+                    db_map = await Map.get(map_id=api_map.id, is_cs2=True)
+                except DoesNotExist:
+                    pass
+                else:
+                    await db_map.delete()
+                    deleted += 1
+                continue
+
+            tier = pro_tier = vnl_tier = vnl_pro_tier = course_name = None
+            if api_map.courses:
+                course = api_map.courses[0]
+                course_name = course.name
+                filters = course.filters
+                tier = _tier_num(filters.classic.nub_tier)
+                pro_tier = _tier_num(filters.classic.pro_tier)
+                vnl_tier = _tier_num(filters.vanilla.nub_tier)
+                vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
+
             try:
                 db_map = await Map.get(map_id=api_map.id, is_cs2=True)
             except DoesNotExist:
-                pass
+                await Map(map_id=api_map.id, is_cs2=True, name=api_map.name,
+                          tier=tier, pro_tier=pro_tier, vnl_tier=vnl_tier,
+                          vnl_pro_tier=vnl_pro_tier,
+                          main_course=course_name).save()
+                new += 1
             else:
-                await db_map.delete()
-                deleted += 1
-            continue
-
-        tier = pro_tier = vnl_tier = vnl_pro_tier = course_name = None
-        if api_map.courses:
-            course = api_map.courses[0]
-            course_name = course.name
-            filters = course.filters
-            tier = _tier_num(filters.classic.nub_tier)
-            pro_tier = _tier_num(filters.classic.pro_tier)
-            vnl_tier = _tier_num(filters.vanilla.nub_tier)
-            vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
-
-        try:
-            db_map = await Map.get(map_id=api_map.id, is_cs2=True)
-        except DoesNotExist:
-            await Map(map_id=api_map.id, is_cs2=True, name=api_map.name,
-                      tier=tier, pro_tier=pro_tier, vnl_tier=vnl_tier,
-                      vnl_pro_tier=vnl_pro_tier,
-                      main_course=course_name).save()
-            new += 1
-        else:
-            changed = False
-            if db_map.name != api_map.name:
-                _logger.info('Updating name for map %s', api_map.name)
-                db_map.name = api_map.name
-                changed = True
-            if db_map.main_course != course_name and course_name is not None:
-                _logger.info('Updating main course for map %s', api_map.name)
-                db_map.main_course = course_name
-                changed = True
-            if db_map.tier != tier and tier is not None:
-                _logger.info('Updating tier for map %s', api_map.name)
-                db_map.tier = tier
-                changed = True
-            if db_map.pro_tier != pro_tier and pro_tier is not None:
-                _logger.info('Updating pro tier for map %s', api_map.name)
-                db_map.pro_tier = pro_tier
-                changed = True
-            if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                _logger.info('Updating VNL tier for map %s', api_map.name)
-                db_map.vnl_tier = vnl_tier
-                changed = True
-            if (db_map.vnl_pro_tier != vnl_pro_tier and
-                vnl_pro_tier is not None):
-                _logger.info('Updating VNL pro tier for map %s', api_map.name)
-                db_map.vnl_pro_tier = vnl_pro_tier
-                changed = True
-            if changed:
-                await db_map.save()
-                updated += 1
+                changed = False
+                if db_map.name != api_map.name:
+                    _logger.info('Updating name for map %s', api_map.name)
+                    db_map.name = api_map.name
+                    changed = True
+                if db_map.main_course != course_name:
+                    _logger.info('Updating main course for map %s',
+                                 api_map.name)
+                    db_map.main_course = course_name
+                    changed = True
+                if db_map.tier != tier:
+                    _logger.info('Updating tier for map %s', api_map.name)
+                    db_map.tier = tier
+                    changed = True
+                if db_map.pro_tier != pro_tier:
+                    _logger.info('Updating pro tier for map %s', api_map.name)
+                    db_map.pro_tier = pro_tier
+                    changed = True
+                if db_map.vnl_tier != vnl_tier:
+                    _logger.info('Updating VNL tier for map %s', api_map.name)
+                    db_map.vnl_tier = vnl_tier
+                    changed = True
+                if db_map.vnl_pro_tier != vnl_pro_tier:
+                    _logger.info('Updating VNL pro tier for map %s',
+                                 api_map.name)
+                    db_map.vnl_pro_tier = vnl_pro_tier
+                    changed = True
+                if changed:
+                    await db_map.save()
+                    updated += 1
     _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
                  new, updated, deleted)
 
