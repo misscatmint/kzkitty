@@ -14,7 +14,7 @@ from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapNotFoundError, Rank, PersonalBest,
                                  Profile)
 from kzkitty.api.steam import SteamError, name_for_steamid64
-from kzkitty.models import Map, Mode, Type
+from kzkitty.models import Course, Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.cs2')
 
@@ -74,6 +74,11 @@ def _tier_num(name: str) -> int | None:
             'hard': 5, 'very-hard': 6, 'extreme': 7, 'death': 8,
             'unfeasible': 9, 'impossible': 10}.get(name)
 
+def _tier_code(tier: int | None) -> str:
+    return {1: 'very-easy', 2: 'easy', 3: 'medium', 4: 'advanced',
+            5: 'hard', 6: 'very-hard', 7: 'extreme', 8: 'death',
+            9: 'unfeasible', 10: 'impossible'}.get(tier or -1, 'unknown')
+
 def _tier_name(tier: int | None) -> str:
     return {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Advanced',
             5: 'Hard', 6: 'Very Hard', 7: 'Extreme', 8: 'Death',
@@ -115,23 +120,11 @@ async def refresh_cs2_db_maps() -> None:
                     deleted += 1
                 continue
 
-            tier = pro_tier = vnl_tier = vnl_pro_tier = course_name = None
-            if api_map.courses:
-                course = api_map.courses[0]
-                course_name = course.name
-                filters = course.filters
-                tier = _tier_num(filters.classic.nub_tier)
-                pro_tier = _tier_num(filters.classic.pro_tier)
-                vnl_tier = _tier_num(filters.vanilla.nub_tier)
-                vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
-
             try:
                 db_map = await Map.get(map_id=api_map.id, is_cs2=True)
             except DoesNotExist:
-                await Map(map_id=api_map.id, is_cs2=True, name=api_map.name,
-                          tier=tier, pro_tier=pro_tier, vnl_tier=vnl_tier,
-                          vnl_pro_tier=vnl_pro_tier,
-                          main_course=course_name).save()
+                await Map(map_id=api_map.id, is_cs2=True,
+                          name=api_map.name).save()
                 new += 1
             else:
                 changed = False
@@ -139,31 +132,38 @@ async def refresh_cs2_db_maps() -> None:
                     _logger.info('Updating name for map %s', api_map.name)
                     db_map.name = api_map.name
                     changed = True
-                if db_map.main_course != course_name:
-                    _logger.info('Updating main course for map %s',
-                                 api_map.name)
-                    db_map.main_course = course_name
-                    changed = True
-                if db_map.tier != tier:
-                    _logger.info('Updating tier for map %s', api_map.name)
-                    db_map.tier = tier
-                    changed = True
-                if db_map.pro_tier != pro_tier:
-                    _logger.info('Updating pro tier for map %s', api_map.name)
-                    db_map.pro_tier = pro_tier
-                    changed = True
-                if db_map.vnl_tier != vnl_tier:
-                    _logger.info('Updating VNL tier for map %s', api_map.name)
-                    db_map.vnl_tier = vnl_tier
-                    changed = True
-                if db_map.vnl_pro_tier != vnl_pro_tier:
-                    _logger.info('Updating VNL pro tier for map %s',
-                                 api_map.name)
-                    db_map.vnl_pro_tier = vnl_pro_tier
-                    changed = True
                 if changed:
                     await db_map.save()
                     updated += 1
+
+            db_api_courses = []
+            db_courses = (await Course.filter(map_id=api_map.id)
+                                      .order_by('course_id'))
+            for db_course in db_courses:
+                classic = _APICourseFilter(
+                    nub_tier=_tier_code(db_course.tier),
+                    pro_tier=_tier_code(db_course.pro_tier))
+                vanilla = _APICourseFilter(
+                    nub_tier=_tier_code(db_course.vnl_tier),
+                    pro_tier=_tier_code(db_course.vnl_pro_tier))
+                filters = _APICourseFilters(classic=classic, vanilla=vanilla)
+                db_api_courses.append(_APICourse(name=db_course.name,
+                                                 filters=filters))
+
+            if api_map.courses != db_api_courses:
+                _logger.info('Updating courses for map %s', api_map.name)
+                await Course.filter(map_id=api_map.id).delete()
+                for course_id, course in enumerate(api_map.courses, start=1):
+                    filters = course.filters
+                    tier = _tier_num(filters.classic.nub_tier)
+                    pro_tier = _tier_num(filters.classic.pro_tier)
+                    vnl_tier = _tier_num(filters.vanilla.nub_tier)
+                    vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
+                    await Course(name=course.name, course_id=course_id,
+                                 map_id=api_map.id, tier=tier,
+                                 pro_tier=pro_tier, vnl_tier=vnl_tier,
+                                 vnl_pro_tier=vnl_pro_tier).save()
+
     _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
                  new, updated, deleted)
 
@@ -269,21 +269,27 @@ class CS2API(API):
                 raise APIMapAmbiguousError(db_maps)
             elif db_maps:
                 db_map = db_maps[0]
+
+        course_id = course_name = tier = pro_tier = None
         if db_map is not None:
             name = db_map.name
-
-        if (db_map is not None and
-            db_map.main_course is not None and
-            (course is None or course.lower() == db_map.main_course.lower())):
-            course_id = 1
-            course_name = db_map.main_course
-            if self.mode == Mode.VNL2:
-                tier = db_map.vnl_tier
-                pro_tier = db_map.vnl_pro_tier
+            if course is None:
+                db_course = await Course.filter(course_id=1,
+                                                map_id=db_map.map_id).first()
             else:
-                tier = db_map.tier
-                pro_tier = db_map.pro_tier
-        else:
+                db_course = await Course.filter(name__icontains=course,
+                                                map_id=db_map.map_id).first()
+            if db_course is not None:
+                course_id = db_course.course_id
+                course_name = db_course.name
+                if self.mode == Mode.VNL2:
+                    tier = db_course.vnl_tier
+                    pro_tier = db_course.vnl_pro_tier
+                else:
+                    tier = db_course.tier
+                    pro_tier = db_course.pro_tier
+
+        if course_id is None:
             json = {}
             url = f'https://api.cs2kz.org/maps/{quote(name)}'
             ctimeout = (ClientTimeout(total=self.timeout)
