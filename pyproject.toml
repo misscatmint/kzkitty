@@ -19,8 +19,6 @@ typeCheckingMode = "standard"
 [tool.uv]
 exclude-dependencies = ["aiodns"]
 
-[tool.uv.sources]
-hikari = {
-    git = "https://github.com/hikari-py/hikari.git",
-    rev = "222aab1bcd54bba9292d0087271a289a0742a56b"
-}
+[tool.uv.sources.hikari]
+git = "https://github.com/hikari-py/hikari.git"
+rev = "222aab1bcd54bba9292d0087271a289a0742a56b"
