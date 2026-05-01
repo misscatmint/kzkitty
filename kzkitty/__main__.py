@@ -32,10 +32,7 @@ async def _dump(db_url: str) -> None:
         await close_db()
 
 def main(args: list[str]) -> None:
-    discord_token = os.environ['KZKITTY_DISCORD_TOKEN']
     db_url = os.environ['KZKITTY_DB']
-    refresh_db_hours = int(os.environ.get('KZKITTY_REFRESH_DB_HOURS', 24))
-    rest = os.environ.get('KZKITTY_REST')
 
     try:
         import uvloop
@@ -59,6 +56,9 @@ def main(args: list[str]) -> None:
             asyncio.run(_dump(db_url))
             return
 
+    discord_token = os.environ['KZKITTY_DISCORD_TOKEN']
+    refresh_db_hours = int(os.environ.get('KZKITTY_REFRESH_DB_HOURS', 24))
+    rest = os.environ.get('KZKITTY_REST')
     if rest:
         host, port = rest.split(':', 1)
         runrest(host, int(port), discord_token, db_url, refresh_db_hours)
