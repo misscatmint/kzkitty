@@ -28,7 +28,15 @@ class Map(Model):
     pro_tier = fields.IntField(null=True)
     vnl_tier = fields.IntField(null=True)
     vnl_pro_tier = fields.IntField(null=True)
-    main_course = fields.CharField(null=True, max_length=255)
+
+class Course(Model):
+    name = fields.CharField(max_length=255)
+    course_id = fields.IntField()
+    map_id = fields.IntField()
+    tier = fields.IntField(null=True)
+    pro_tier = fields.IntField(null=True)
+    vnl_tier = fields.IntField(null=True)
+    vnl_pro_tier = fields.IntField(null=True)
 
 class Player(Model):
     user_id = fields.IntField()
