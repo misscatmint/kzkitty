@@ -204,16 +204,13 @@ async def _slash_mode(ctx: Context,
                       mode_name: Option[str | None, _ModeParams]=None
                       ) -> None:
     """Set the user's default game mode"""
+    player = await _get_player(ctx)
     if mode_name is None:
-        player = await _get_player(ctx)
         await ctx.respond(f'Mode set to {player.mode}',
                           flags=MessageFlag.EPHEMERAL)
         return
-
-    defaults = {'mode': mode_name}
-    await Player.update_or_create(user_id=ctx.user.id,
-                                  server_id=ctx.guild_id,
-                                  defaults=defaults)
+    player.mode = Mode(mode_name)
+    await player.save()
     await ctx.respond(f'Mode set to {mode_name}',
                       flags=MessageFlag.EPHEMERAL)
 
