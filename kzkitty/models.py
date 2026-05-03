@@ -41,7 +41,7 @@ class Course(Model):
 class Player(Model):
     user_id = fields.IntField()
     server_id = fields.IntField()
-    steamid64 = fields.IntField(null=True)
+    steamid64 = fields.IntField()
     mode = fields.CharEnumField(Mode, default=Mode.KZT)
 
     class Meta: # type: ignore
