@@ -44,7 +44,7 @@ class Player(Model):
     steamid64 = fields.IntField()
     mode = fields.CharEnumField(Mode, default=Mode.KZT)
 
-    class Meta: # type: ignore
+    class Meta: # pyright: ignore[reportIncompatibleVariableOverride]
         unique_together = ('user_id', 'server_id')
 
 async def init_db(db_url: str) -> None:
