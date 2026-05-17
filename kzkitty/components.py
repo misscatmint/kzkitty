@@ -177,10 +177,10 @@ async def profile_component(profile: Profile, player: Player, user: User,
         body += f"""**Average**: {profile.average}
 """
     return await _player_container(player, accent_color, body, 
-                                   avatar_timeout=avatar_timeout)
+                                   steam_timeout=steam_timeout)
 
 def _wr_time(pb: PersonalBest) -> str:
-    player_name = pb.player_name or '(unknown)'
+    player_name = pb.player_name or pb.steamid64
     return f'{_formattime(pb.time)} by [{player_name}]({pb.player_url})'
 
 async def map_component(api_map: APIMap, wrs: list[PersonalBest],
