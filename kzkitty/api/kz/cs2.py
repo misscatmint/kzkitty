@@ -290,7 +290,6 @@ class CS2API(API):
                     pro_tier = db_course.pro_tier
 
         if course_id is None:
-            json = {}
             url = f'https://api.cs2kz.org/maps/{quote(name)}'
             ctimeout = (ClientTimeout(total=self.timeout)
                         if self.timeout is not None else None)
@@ -320,9 +319,6 @@ class CS2API(API):
                 else:
                     raise APIMapError('Map has no courses')
             else:
-                course_id = None
-                course_info = None
-                course_name = None
                 for course_id, course_info in enumerate(courses, start=1):
                     course_name = course_info.name
                     if course.lower() in course_name.lower():

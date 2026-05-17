@@ -327,7 +327,6 @@ class CSGOAPI(API):
             vnl_tier = db_map.vnl_tier
             vnl_pro_tier = db_map.vnl_pro_tier
         else:
-            json = {}
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
             ctimeout = (ClientTimeout(total=self.timeout)
                         if self.timeout is not None else None)
