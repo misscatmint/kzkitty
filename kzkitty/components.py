@@ -7,21 +7,24 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
-from kzkitty.api.steam import (SteamError, avatar_url_for_steamid64,
-                               name_for_steamid64)
+from kzkitty.api.steam import SteamError, profile_for_steamid64
 from kzkitty.models import Player
 
 _logger = logging.getLogger('kzkitty.components')
 
-async def _player_container(player: Player, accent_color: Color, body: str,
-                            steam_timeout: int | None=None):
-    container = ContainerComponentBuilder(accent_color=accent_color)
+async def _avatar_url(player: Player, steam_timeout: int | None=None
+                      ) -> str | None:
     try:
-        avatar_url = await avatar_url_for_steamid64(player.steamid64,
+        steam_profile = await profile_for_steamid64(player.steamid64,
                                                     timeout=steam_timeout)
     except SteamError:
         _logger.exception("Couldn't get player avatar")
-        avatar_url = None
+        return None
+    return steam_profile.avatar_url
+
+async def _avatar_container(avatar_url: str | None, accent_color: Color, body: str
+                            ) -> ContainerComponentBuilder:
+    container = ContainerComponentBuilder(accent_color=accent_color)
     if avatar_url is not None:
         thumbnail = ThumbnailComponentBuilder(media=avatar_url)
         section = SectionComponentBuilder(accessory=thumbnail)
@@ -133,8 +136,8 @@ async def pb_component(pb: PersonalBest, player: Player, user: User,
         accent_color = Color(0x1e90ff)
     else:
         accent_color = Color(0xffa500)
-    container = await _player_container(player, accent_color, body,
-                                        steam_timeout=steam_timeout)
+    avatar_url = await _avatar_url(player, steam_timeout=steam_timeout)
+    container = await _avatar_container(avatar_url, accent_color, body)
     gallery = MediaGalleryComponentBuilder()
     gallery.add_media_gallery_item(pb.map.thumbnail_url)
     container.add_component(gallery)
@@ -146,13 +149,18 @@ async def profile_component(profile: Profile, player: Player, user: User,
                             ) -> ContainerComponentBuilder:
     if profile.name is None:
         try:
-            name = await name_for_steamid64(player.steamid64,
-                                            timeout=steam_timeout)
+            steam_profile = await profile_for_steamid64(player.steamid64,
+                                                        timeout=steam_timeout)
         except SteamError:
-            _logger.exception("Couldn't get new player name")
+            _logger.exception("Couldn't get new player name/avatar")
             name = user.display_name
+            avatar_url = None
+        else:
+            name = steam_profile.name
+            avatar_url = steam_profile.avatar_url
     else:
         name = profile.name
+        avatar_url = await _avatar_url(player, steam_timeout=steam_timeout)
     colors = {Rank.BEGINNER_MINUS: 0xffffff,
               Rank.BEGINNER: 0xffffff,
               Rank.BEGINNER_PLUS: 0xffffff,
@@ -185,8 +193,7 @@ async def profile_component(profile: Profile, player: Player, user: User,
     if profile.average is not None:
         body += f"""**Average**: {profile.average}
 """
-    return await _player_container(player, accent_color, body, 
-                                   steam_timeout=steam_timeout)
+    return await _avatar_container(avatar_url, accent_color, body)
 
 def _wr_time(pb: PersonalBest) -> str:
     player_name = pb.player_name or pb.steamid64

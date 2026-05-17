@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
@@ -8,6 +9,11 @@ class SteamError(Exception):
 
 class SteamValueError(SteamError):
     pass
+
+@dataclass
+class SteamProfile:
+    name: str
+    avatar_url: str
 
 async def _get_steam_profile(url: str, timeout: int | None=None
                              ) -> ElementTree.Element:
@@ -42,19 +48,14 @@ async def steamid64_for_profile(url: str, timeout: int | None=None) -> int:
     except ValueError as e:
         raise SteamError('Malformed Steam profile XML (bad steamid64)') from e
 
-async def avatar_url_for_steamid64(steamid64: int, timeout: int | None=None
-                                   ) -> str:
-    url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
-    xml = await _get_steam_profile(url, timeout=timeout)
-    avatar = xml.find('avatarFull')
-    if avatar is None or avatar.text is None:
-        raise SteamError('Malformed Steam profile XML (no avatar)')
-    return avatar.text
-
-async def name_for_steamid64(steamid64: int, timeout: int | None=None) -> str:
+async def profile_for_steamid64(steamid64: int, timeout: int | None=None
+                                ) -> SteamProfile:
     url = f'https://steamcommunity.com/profiles/{steamid64}?xml=1'
     xml = await _get_steam_profile(url, timeout=timeout)
     steam_id = xml.find('steamID')
     if steam_id is None or steam_id.text is None:
         raise SteamError('Malformed Steam profile XML (no steamID)')
-    return steam_id.text
+    avatar = xml.find('avatarFull')
+    if avatar is None or avatar.text is None:
+        raise SteamError('Malformed Steam profile XML (no avatar)')
+    return SteamProfile(name=steam_id.text, avatar_url=avatar.text)
