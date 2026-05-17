@@ -318,9 +318,10 @@ class CS2API(API):
                 else:
                     raise APIMapError('Map has no courses')
             else:
+                course = course.lower()
                 for course_id, course_info in enumerate(courses, start=1):
                     course_name = course_info.name
-                    if course.lower() in course_name.lower():
+                    if course in course_name.lower():
                         break
                 else:
                     raise APIMapError('Map course not found')
