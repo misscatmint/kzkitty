@@ -24,7 +24,8 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 
 _logger = logging.getLogger('kzkitty.bot')
 
-_API_TIMEOUT = 5
+_API_TIMEOUT = 15
+_STEAM_TIMEOUT = 5
 
 def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
     """Register bot commands and hooks"""
@@ -232,7 +233,7 @@ async def _slash_pb(ctx: Context,
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
     component = await pb_component(pb, player, ctx.user,
-                                   steam_timeout=_API_TIMEOUT)
+                                   steam_timeout=_STEAM_TIMEOUT)
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
@@ -252,7 +253,7 @@ async def _slash_latest(ctx: Context,
         return
 
     component = await pb_component(pb, player, ctx.user,
-                                   steam_timeout=_API_TIMEOUT)
+                                   steam_timeout=_STEAM_TIMEOUT)
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
@@ -290,5 +291,5 @@ async def _slash_profile(ctx: Context,
     api = api_for_mode(mode, timeout=_API_TIMEOUT)
     profile = await api.get_profile(player.steamid64)
     component = await profile_component(profile, player, ctx.user,
-                                        steam_timeout=_API_TIMEOUT)
+                                        steam_timeout=_STEAM_TIMEOUT)
     await ctx.respond(component=component)
