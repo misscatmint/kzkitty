@@ -7,17 +7,18 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
-from kzkitty.api.steam import SteamError, avatar_url_for_steamid64
+from kzkitty.api.steam import (SteamError, avatar_url_for_steamid64,
+                               name_for_steamid64)
 from kzkitty.models import Player
 
 _logger = logging.getLogger('kzkitty.components')
 
 async def _player_container(player: Player, accent_color: Color, body: str,
-                            avatar_timeout: int | None=None):
+                            steam_timeout: int | None=None):
     container = ContainerComponentBuilder(accent_color=accent_color)
     try:
         avatar_url = await avatar_url_for_steamid64(player.steamid64,
-                                                    timeout=avatar_timeout)
+                                                    timeout=steam_timeout)
     except SteamError:
         _logger.exception("Couldn't get player avatar")
         avatar_url = None
@@ -86,7 +87,7 @@ def _map_info(api_map: APIMap, pro: bool | None=None) -> str:
     return extra
 
 async def pb_component(pb: PersonalBest, player: Player, user: User,
-                       avatar_timeout: int | None=None
+                       steam_timeout: int | None=None
                        ) -> ContainerComponentBuilder:
     player_name = pb.player_name or user.display_name
     map_info = _map_info(pb.map, pb.teleports == 0)
@@ -133,7 +134,7 @@ async def pb_component(pb: PersonalBest, player: Player, user: User,
     else:
         accent_color = Color(0xffa500)
     container = await _player_container(player, accent_color, body,
-                                        avatar_timeout=avatar_timeout)
+                                        steam_timeout=steam_timeout)
     gallery = MediaGalleryComponentBuilder()
     gallery.add_media_gallery_item(pb.map.thumbnail_url)
     container.add_component(gallery)
@@ -141,9 +142,17 @@ async def pb_component(pb: PersonalBest, player: Player, user: User,
     return container
 
 async def profile_component(profile: Profile, player: Player, user: User,
-                            avatar_timeout: int | None=None
+                            steam_timeout: int | None=None
                             ) -> ContainerComponentBuilder:
-    name = profile.name or user.display_name
+    if profile.name is None:
+        try:
+            name = await name_for_steamid64(player.steamid64,
+                                            timeout=steam_timeout)
+        except SteamError:
+            _logger.exception("Couldn't get new player name")
+            name = user.display_name
+    else:
+        name = profile.name
     colors = {Rank.BEGINNER_MINUS: 0xffffff,
               Rank.BEGINNER: 0xffffff,
               Rank.BEGINNER_PLUS: 0xffffff,

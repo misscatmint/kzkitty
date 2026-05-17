@@ -13,7 +13,6 @@ from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank, PersonalBest,
                                  Profile)
-from kzkitty.api.steam import SteamError, name_for_steamid64
 from kzkitty.models import Course, Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.cs2')
@@ -394,12 +393,7 @@ class CS2API(API):
                     if r.status == 200:
                         json = await r.text()
                     elif r.status == 404:
-                        try:
-                            player_name = await name_for_steamid64(
-                                steamid64, timeout=self.timeout)
-                        except SteamError:
-                            player_name = None
-                        return Profile(name=player_name, url=player_url,
+                        return Profile(name=None, url=player_url,
                                        mode=self.mode, rank=Rank.UNKNOWN,
                                        points=0, average=None)
                     else:
@@ -432,6 +426,5 @@ class CS2API(API):
             for threshold, rank in thresholds:
                 if points >= threshold:
                     break
-        return Profile(name=profile.name, url=player_url,
-                       mode=self.mode, rank=rank, points=int(points),
-                       average=None)
+        return Profile(name=profile.name, url=player_url, mode=self.mode,
+                       rank=rank, points=int(points), average=None)

@@ -13,7 +13,6 @@ from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank, PersonalBest,
                                  Profile)
-from kzkitty.api.steam import SteamError, name_for_steamid64
 from kzkitty.models import Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.csgo')
@@ -468,12 +467,7 @@ class CSGOAPI(API):
         except ValidationError as e:
             raise APIError('Malformed global API ranks') from e
         if not api_ranks:
-            try:
-                player_name = await name_for_steamid64(steamid64,
-                                                       timeout=self.timeout)
-            except SteamError:
-                player_name = None
-            return Profile(name=player_name, url=player_url, mode=self.mode,
+            return Profile(name=None, url=player_url, mode=self.mode,
                            rank=Rank.NEW, points=0, average=0)
 
         api_rank = api_ranks[0]
