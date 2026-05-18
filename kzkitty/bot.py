@@ -16,8 +16,8 @@ from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
                             init_api, refresh_map_db)
-from kzkitty.api.steam import (SteamError, SteamValueError,
-                               steamid64_for_profile)
+from kzkitty.api.steam import (SteamError, SteamValueError, close_steam,
+                               get_steam, init_steam)
 from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.models import (Map, Mode, Player, Type, close_db,
                             import_default_players, init_db)
@@ -44,6 +44,7 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
                                    run_on_start=True)
     async def startup(_: Client) -> None:
         await init_api(timeout=_API_TIMEOUT)
+        await init_steam(timeout=_STEAM_TIMEOUT)
         await init_db(db_url)
         asyncio.create_task(import_default_players())
         refresh_db_loop.start()
@@ -51,6 +52,7 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
 
     async def shutdown(_: Client) -> None:
         await close_api()
+        await close_steam()
         await close_db()
     client.add_shutdown_hook(shutdown)
 
@@ -183,8 +185,9 @@ async def _slash_register(ctx: Context,
                           mode_name: Option[str | None, _ModeParams]=Mode.KZT
                           ) -> None:
     """Register the user with a given Steam profile and game mode"""
+    steam = get_steam()
     try:
-        steamid64 = await steamid64_for_profile(profile, timeout=_API_TIMEOUT)
+        steamid64 = await steam.steamid64_for_profile(profile)
     except SteamValueError:
         await ctx.respond('Invalid Steam profile URL',
                           flags=MessageFlag.EPHEMERAL)
@@ -235,8 +238,7 @@ async def _slash_pb(ctx: Context,
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
-    component = await pb_component(pb, player, ctx.user,
-                                   steam_timeout=_STEAM_TIMEOUT)
+    component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
@@ -255,8 +257,7 @@ async def _slash_latest(ctx: Context,
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
 
-    component = await pb_component(pb, player, ctx.user,
-                                   steam_timeout=_STEAM_TIMEOUT)
+    component = await pb_component(pb, player, ctx.user)
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
@@ -293,6 +294,5 @@ async def _slash_profile(ctx: Context,
     mode = player.mode if mode_name is None else Mode(mode_name)
     api = api_for_mode(mode)
     profile = await api.get_profile(player.steamid64, mode)
-    component = await profile_component(profile, player, ctx.user,
-                                        steam_timeout=_STEAM_TIMEOUT)
+    component = await profile_component(profile, player, ctx.user)
     await ctx.respond(component=component)
