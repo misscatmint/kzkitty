@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Self
 
 from kzkitty.models import Map, Mode, Type
 
@@ -89,6 +90,16 @@ class API(ABC):
     def __init__(self, mode: Mode, timeout: int | None=None) -> None:
         self.mode: Mode = mode
         self.timeout: int | None = timeout
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, _exc, _val, _tb) -> None:
+        await self.close()
+
+    @abstractmethod
+    async def close(self) -> None:
+        ...
 
     @abstractmethod
     def has_tp_wrs(self) -> bool:
