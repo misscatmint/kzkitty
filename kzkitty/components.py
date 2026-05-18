@@ -200,13 +200,13 @@ def _wr_time(pb: PersonalBest) -> str:
     return f'{_formattime(pb.time)} by [{player_name}]({pb.player_url})'
 
 async def map_component(api_map: APIMap, wrs: list[PersonalBest],
-                        has_tp_wrs: bool) -> ContainerComponentBuilder:
+                        ) -> ContainerComponentBuilder:
     map_info = _map_info(api_map)
     body = f"""## [{api_map.name}]({api_map.url})
 
 {map_info}
 """
-    if has_tp_wrs:
+    if api_map.has_tp_wrs:
         tp_pb = pro_pb = None
         tp_pb_time = pro_pb_time = '(none)'
         for pb in wrs:

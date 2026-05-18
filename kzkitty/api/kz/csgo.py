@@ -194,10 +194,6 @@ class CSGOAPI(API):
     async def close(self) -> None:
         await self._session.close()
 
-    @override
-    def has_tp_wrs(self) -> bool:
-        return True
-
     async def _records_for_steamid64(self, steamid64: int, mode: Mode,
                                      tp_type: Type=Type.ANY,
                                      map_name: str | None=None,
@@ -393,7 +389,8 @@ class CSGOAPI(API):
         return APIMap(name=name, mode=mode, bonus=bonus or None,
                       course=None, tier=tier, tier_name=tier_name,
                       pro_tier=pro_tier, pro_tier_name=pro_tier_name,
-                      max_tier=max_tier, url=url, thumbnail_url=thumbnail_url)
+                      max_tier=max_tier, has_tp_wrs=True, url=url,
+                      thumbnail_url=thumbnail_url)
 
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:

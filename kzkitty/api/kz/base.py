@@ -37,6 +37,7 @@ class APIMap:
     pro_tier: int | None
     pro_tier_name: str | None
     max_tier: int | None
+    has_tp_wrs: bool
     url: str
     thumbnail_url: str
 
@@ -101,10 +102,6 @@ class API(ABC):
 
     @abstractmethod
     async def close(self) -> None:
-        ...
-
-    @abstractmethod
-    def has_tp_wrs(self) -> bool:
         ...
 
     @abstractmethod

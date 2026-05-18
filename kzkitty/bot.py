@@ -278,7 +278,7 @@ async def _slash_map(ctx: Context,
 
     api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
     wrs = await api.get_wrs(api_map)
-    component = await map_component(api_map, wrs, api.has_tp_wrs())
+    component = await map_component(api_map, wrs)
     await ctx.respond(component=component)
 
 @slash_command('profile', 'Show rank, point total, and point average',
