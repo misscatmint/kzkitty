@@ -35,9 +35,11 @@ class Steam:
     async def _get_profile(self, url: str) -> ElementTree.Element:
         try:
             r = await self._session.get(url, stream=True)
-            if r.status_code != 200 or r.oheaders.content_type != 'text/xml':
+            if r.status_code != 200:
                 raise SteamError("Couldn't get Steam profile (HTTP %d)"
                                  % r.status_code)
+            elif r.oheaders.content_type != 'text/xml':
+                raise SteamError("Couldn't get Steam profile (not text/xml)")
             text = await r.text
             if text is None:
                 raise SteamError("Couldn't get Steam profile (bad encoding)")
