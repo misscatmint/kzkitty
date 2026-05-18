@@ -24,10 +24,8 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 
 _logger = logging.getLogger('kzkitty.bot')
 
-_API_TIMEOUT = 15
-_STEAM_TIMEOUT = 5
-
-def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
+def _setup(client: Client, db_url: str, refresh_db_hours: int,
+           api_timeout: int, steam_timeout: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
     client.include(_slash_register) # ty: ignore[invalid-argument-type]
@@ -43,8 +41,8 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
     async def startup(_: Client) -> None:
-        await init_api(timeout=_API_TIMEOUT)
-        await init_steam(timeout=_STEAM_TIMEOUT)
+        await init_api(timeout=api_timeout)
+        await init_steam(timeout=steam_timeout)
         await init_db(db_url)
         asyncio.create_task(import_default_players())
         refresh_db_loop.start()
@@ -56,21 +54,23 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
         await close_db()
     client.add_shutdown_hook(shutdown)
 
-def run(discord_token: str, db_url: str, refresh_db_hours: int=24) -> None:
+def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
+        api_timeout: int=15, steam_timeout: int=5) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
     bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
-    _setup(client, db_url, refresh_db_hours)
+    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout)
     bot.run(check_for_updates=False)
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
-            refresh_db_hours: int=24) -> None:
+            refresh_db_hours: int=24, api_timeout: int=15,
+            steam_timeout: int=5) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
                   suppress_optimization_warning=True)
     client = RESTClient(bot)
-    _setup(client, db_url, refresh_db_hours)
+    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout)
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[Client, str]) -> list[str]:
