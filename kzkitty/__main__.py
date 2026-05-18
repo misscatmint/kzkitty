@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 
-from kzkitty.api.kz import refresh_db_maps
+from kzkitty.api.kz import close_api, init_api, refresh_map_db
 from kzkitty.bot import run, runrest
 from kzkitty.models import (close_db, dump_players, export_default_players,
                             init_db)
@@ -11,10 +11,12 @@ from kzkitty.models import (close_db, dump_players, export_default_players,
 _logger = logging.getLogger('kzkitty')
 
 async def _refresh(db_url: str) -> None:
+    await init_api()
     await init_db(db_url)
     try:
-        await refresh_db_maps()
+        await refresh_map_db()
     finally:
+        await close_api()
         await close_db()
 
 async def _default(db_url: str) -> None:
@@ -46,7 +48,6 @@ def main(args: list[str]) -> None:
     if args:
         if args[0] == 'refresh':
             logging.basicConfig(level=logging.INFO)
-            _logger.info('Refreshing map database')
             asyncio.run(_refresh(db_url))
             return
         elif args[0] == 'default':

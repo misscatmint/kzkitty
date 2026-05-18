@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Self
+from typing import NamedTuple, Self
 
 from kzkitty.models import Map, Mode, Type
 
@@ -90,6 +90,11 @@ class Profile:
     average: int | None
     url: str
 
+class RefreshMapDBResult(NamedTuple):
+    new: int
+    updated: int
+    deleted: int
+
 class API(ABC):
     def __init__(self, timeout: int | None=None) -> None:
         self.timeout: int | None = timeout
@@ -102,6 +107,10 @@ class API(ABC):
 
     @abstractmethod
     async def close(self) -> None:
+        ...
+
+    @abstractmethod
+    async def refresh_map_db(self) -> RefreshMapDBResult:
         ...
 
     @abstractmethod

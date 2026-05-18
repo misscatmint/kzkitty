@@ -4,15 +4,15 @@ from datetime import datetime, timedelta, timezone
 from typing import override
 from urllib.parse import quote, urlencode
 
-from niquests import aget, AsyncSession, RequestException
+from niquests import AsyncSession, RequestException
 from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
-                                 APIMapNotFoundError, Rank, PersonalBest,
-                                 Profile)
+                                 APIMapNotFoundError, Rank,
+                                 RefreshMapDBResult, PersonalBest, Profile)
 from kzkitty.models import Course, Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.cs2')
@@ -83,91 +83,6 @@ def _tier_name(tier: int | None) -> str:
             5: 'Hard', 6: 'Very Hard', 7: 'Extreme', 8: 'Death',
             9: 'Unfeasible', 10: 'Impossible'}.get(tier or -1, 'Unknown')
 
-async def refresh_cs2_db_maps() -> None:
-    _logger.info('Downloading CS2 map info')
-    url = 'https://api.cs2kz.org/maps'
-    try:
-        r = await aget(url, stream=True)
-        if r.status_code != 200:
-            _logger.error("Couldn't get global API maps (HTTP %d)",
-                          r.status_code)
-            return
-        json = await r.text
-        if json is None:
-            _logger.error("Couldn't get global API Maps (bad encoding)")
-            return
-    except RequestException:
-        _logger.exception("Couldn't get global API maps")
-        return
-
-    try:
-        results = _APIMapResults.model_validate_json(json)
-    except ValidationError:
-        _logger.exception('Malformed global API maps')
-        return
-
-    new = 0
-    updated = 0
-    deleted = 0
-    for api_map in results.values:
-        async with in_transaction():
-            if api_map.state != 'approved':
-                try:
-                    db_map = await Map.get(map_id=api_map.id, is_cs2=True)
-                except DoesNotExist:
-                    pass
-                else:
-                    await db_map.delete()
-                    deleted += 1
-                continue
-
-            try:
-                db_map = await Map.get(map_id=api_map.id, is_cs2=True)
-            except DoesNotExist:
-                await Map(map_id=api_map.id, is_cs2=True,
-                          name=api_map.name).save()
-                new += 1
-            else:
-                changed = False
-                if db_map.name != api_map.name:
-                    _logger.info('Updating name for map %s', api_map.name)
-                    db_map.name = api_map.name
-                    changed = True
-                if changed:
-                    await db_map.save()
-                    updated += 1
-
-            db_api_courses = []
-            db_courses = (await Course.filter(map_id=api_map.id)
-                                      .order_by('course_id'))
-            for db_course in db_courses:
-                classic = _APICourseFilter(
-                    nub_tier=_tier_code(db_course.tier),
-                    pro_tier=_tier_code(db_course.pro_tier))
-                vanilla = _APICourseFilter(
-                    nub_tier=_tier_code(db_course.vnl_tier),
-                    pro_tier=_tier_code(db_course.vnl_pro_tier))
-                filters = _APICourseFilters(classic=classic, vanilla=vanilla)
-                db_api_courses.append(_APICourse(name=db_course.name,
-                                                 filters=filters))
-
-            if api_map.courses != db_api_courses:
-                _logger.info('Updating courses for map %s', api_map.name)
-                await Course.filter(map_id=api_map.id).delete()
-                for course_id, course in enumerate(api_map.courses, start=1):
-                    filters = course.filters
-                    tier = _tier_num(filters.classic.nub_tier)
-                    pro_tier = _tier_num(filters.classic.pro_tier)
-                    vnl_tier = _tier_num(filters.vanilla.nub_tier)
-                    vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
-                    await Course(name=course.name, course_id=course_id,
-                                 map_id=api_map.id, tier=tier,
-                                 pro_tier=pro_tier, vnl_tier=vnl_tier,
-                                 vnl_pro_tier=vnl_pro_tier).save()
-
-    _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
-                 new, updated, deleted)
-
 def _steamid_to_steamid64(steamid: str) -> int:
     parts = steamid.split(':')
     if len(parts) != 3:
@@ -212,6 +127,97 @@ class CS2API(API):
     @override
     async def close(self) -> None:
         await self._session.close()
+
+    @override
+    async def refresh_map_db(self) -> RefreshMapDBResult:
+        url = 'https://api.cs2kz.org/maps'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API maps (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API Maps (bad encoding)")
+        except RequestException as e:
+            raise APIError("Couldn't get global API maps") from e
+
+        try:
+            results = _APIMapResults.model_validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API maps') from e
+
+        new = updated = deleted = 0
+        for api_map in results.values:
+            async with in_transaction():
+                if api_map.state != 'approved':
+                    try:
+                        db_map = await Map.get(map_id=api_map.id, is_cs2=True)
+                    except DoesNotExist:
+                        pass
+                    else:
+                        await db_map.delete()
+                        deleted += 1
+                    continue
+                
+                is_new = False
+                is_updated = False
+                try:
+                    db_map = await Map.get(map_id=api_map.id, is_cs2=True)
+                except DoesNotExist:
+                    _logger.info('Adding map %s', api_map.name)
+                    await Map(map_id=api_map.id, is_cs2=True,
+                              name=api_map.name).save()
+                    is_new = True
+                else:
+                    changed = False
+                    if db_map.name != api_map.name:
+                        _logger.info('Updating name for map %s', api_map.name)
+                        db_map.name = api_map.name
+                        changed = True
+                    if changed:
+                        await db_map.save()
+                        is_updated = True
+
+                db_api_courses = []
+                db_courses = (await Course.filter(map_id=api_map.id)
+                                          .order_by('course_id'))
+                for db_course in db_courses:
+                    classic = _APICourseFilter(
+                        nub_tier=_tier_code(db_course.tier),
+                        pro_tier=_tier_code(db_course.pro_tier))
+                    vanilla = _APICourseFilter(
+                        nub_tier=_tier_code(db_course.vnl_tier),
+                        pro_tier=_tier_code(db_course.vnl_pro_tier))
+                    filters = _APICourseFilters(classic=classic,
+                                                vanilla=vanilla)
+                    db_api_courses.append(_APICourse(name=db_course.name,
+                                                     filters=filters))
+
+                if api_map.courses != db_api_courses:
+                    if not is_new:
+                        _logger.info('Updating courses for map %s', api_map.name)
+                    await Course.filter(map_id=api_map.id).delete()
+                    for course_id, course in enumerate(api_map.courses,
+                                                       start=1):
+                        filters = course.filters
+                        tier = _tier_num(filters.classic.nub_tier)
+                        pro_tier = _tier_num(filters.classic.pro_tier)
+                        vnl_tier = _tier_num(filters.vanilla.nub_tier)
+                        vnl_pro_tier = _tier_num(filters.vanilla.pro_tier)
+                        await Course(name=course.name, course_id=course_id,
+                                     map_id=api_map.id, tier=tier,
+                                     pro_tier=pro_tier, vnl_tier=vnl_tier,
+                                     vnl_pro_tier=vnl_pro_tier).save()
+                    if not is_new:
+                        is_updated = True
+
+                if is_new:
+                    new += 1
+                elif is_updated:
+                    updated += 1
+
+        return RefreshMapDBResult(new, updated, deleted)
 
     async def _top_record(self, mode: Mode, latest=True,
                           steamid64: int | None=None,
