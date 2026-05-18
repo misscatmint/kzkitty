@@ -182,6 +182,28 @@ def _steamid_to_steamid64(steamid: str) -> int:
 def _profile_url(steamid64: int) -> str:
     return f'https://cs2kz.org/profile/{steamid64}'
 
+def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
+    try:
+        steamid64 = _steamid_to_steamid64(record.player.id)
+    except ValueError as e:
+        raise APIError('Malformed global API Steam ID') from e
+    player_url = _profile_url(steamid64) 
+    if record.teleports == 0:
+        points = record.pro_points
+        place = record.pro_rank
+    else:
+        points = record.nub_points
+        place = record.nub_rank
+    if not isinstance(points, float) or not isinstance(place, int):
+        raise APIError('Malformed global API PB')
+    submitted_at = datetime.fromtimestamp(record.id.time / 1000.0,
+                                          tz=timezone.utc)
+    return PersonalBest(id=record.id.int, steamid64=steamid64,
+                        player_name=record.player.name, player_url=player_url,
+                        map=api_map, time=record.time,
+                        teleports=record.teleports, points=int(points),
+                        point_scale=10000, place=place, date=submitted_at)
+
 class CS2API(API):
     def __init__(self, timeout: int | None=None) -> None:
         super().__init__(timeout)
@@ -233,30 +255,6 @@ class CS2API(API):
         except ValidationError as e:
             raise APIError('Malformed global API PBs') from e
         return records.values[0] if records.values else None
-
-    def _record_to_pb(self, record: _APIRecord, api_map: APIMap
-                      ) -> PersonalBest:
-        try:
-            steamid64 = _steamid_to_steamid64(record.player.id)
-        except ValueError as e:
-            raise APIError('Malformed global API Steam ID') from e
-        player_url = _profile_url(steamid64) 
-        if record.teleports == 0:
-            points = record.pro_points
-            place = record.pro_rank
-        else:
-            points = record.nub_points
-            place = record.nub_rank
-        if not isinstance(points, float) or not isinstance(place, int):
-            raise APIError('Malformed global API PB')
-        submitted_at = datetime.fromtimestamp(record.id.time / 1000.0,
-                                              tz=timezone.utc)
-        return PersonalBest(id=record.id.int, steamid64=steamid64,
-                            player_name=record.player.name,
-                            player_url=player_url, map=api_map,
-                            time=record.time, teleports=record.teleports,
-                            points=int(points), point_scale=10000,
-                            place=place, date=submitted_at)
 
     @override
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
@@ -362,7 +360,7 @@ class CS2API(API):
                                         tp_type=tp_type)
         if record is None:
             return None
-        return self._record_to_pb(record, api_map)
+        return _record_to_pb(record, api_map)
 
     @override
     async def get_latest(self, steamid64: int, mode: Mode,
@@ -373,7 +371,7 @@ class CS2API(API):
             return None
         api_map = await self.get_map(record.map.name, mode,
                                      course=record.course.name)
-        return self._record_to_pb(record, api_map)
+        return _record_to_pb(record, api_map)
 
     @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
@@ -381,7 +379,7 @@ class CS2API(API):
                                         latest=False)
         if record is None:
             return []
-        pbs = [self._record_to_pb(record, api_map)]
+        pbs = [_record_to_pb(record, api_map)]
         pro_rank = record.pro_rank
         if pro_rank is not None:
             return pbs
@@ -389,7 +387,7 @@ class CS2API(API):
                                             api_map=api_map, tp_type=Type.PRO,
                                             latest=False)
         if pro_record is not None:
-            pbs.append(self._record_to_pb(pro_record, api_map))
+            pbs.append(_record_to_pb(pro_record, api_map))
         return pbs
 
     @override
