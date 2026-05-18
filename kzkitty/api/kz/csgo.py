@@ -191,6 +191,10 @@ class CSGOAPI(API):
         self._session = AsyncSession(timeout=timeout)
 
     @override
+    async def close(self) -> None:
+        await self._session.close()
+
+    @override
     def has_tp_wrs(self) -> bool:
         return True
 
