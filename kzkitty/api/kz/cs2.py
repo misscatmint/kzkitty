@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import override
 from urllib.parse import quote, urlencode
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from niquests import aget, AsyncSession, RequestException
 from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
@@ -87,14 +87,16 @@ async def refresh_cs2_db_maps() -> None:
     _logger.info('Downloading CS2 map info')
     url = 'https://api.cs2kz.org/maps'
     try:
-        async with ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    _logger.error("Couldn't get global API maps (HTTP %d)",
-                                  r.status)
-                    return
-                json = await r.text()
-    except ClientError:
+        r = await aget(url, stream=True)
+        if r.status_code != 200:
+            _logger.error("Couldn't get global API maps (HTTP %d)",
+                          r.status_code)
+            return
+        json = await r.text
+        if json is None:
+            _logger.error("Couldn't get global API Maps (bad encoding)")
+            return
+    except RequestException:
         _logger.exception("Couldn't get global API maps")
         return
 
@@ -180,74 +182,80 @@ def _steamid_to_steamid64(steamid: str) -> int:
 def _profile_url(steamid64: int) -> str:
     return f'https://cs2kz.org/profile/{steamid64}'
 
-async def _top_record(mode: Mode, latest=True, steamid64: int | None=None,
-                      api_map: APIMap | None=None, tp_type: Type | None=None,
-                      timeout: int | None=None) -> _APIRecord | None:
-    api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[mode]
-    params: dict[str, str] = {'mode': api_mode_id, 'top': 'true', 'limit': '1'}
-    if steamid64 is not None:
-        params['player'] = str(steamid64)
-    if api_map is not None:
-        if api_map.course is None:
-            raise APIError('Map has no course')
-        params['map'] = api_map.name
-        params['course'] = api_map.course
-    if tp_type == Type.TP:
-        params['has_teleports'] = 'true'
-    elif tp_type == Type.PRO:
-        params['has_teleports'] = 'false'
-    if latest:
-        params['sort_by'] = 'submission-date'
-        params['sort_order'] = 'descending'
-    else:
-        params['sort_by'] = 'time'
-        params['sort_order'] = 'ascending'
-    query = urlencode(params)
-    url = f'https://api.cs2kz.org/records?{query}'
-    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
-    try:
-        async with ClientSession(timeout=ctimeout) as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    raise APIError("Couldn't get global API PBs (HTTP %d)" %
-                                   r.status)
-                json = await r.text()
-    except ClientError as e:
-        raise APIConnectionError("Couldn't get global API PBs") from e
-
-    try:
-        records = _APIRecordResults.model_validate_json(json)
-    except ValidationError as e:
-        raise APIError('Malformed global API PBs') from e
-    return records.values[0] if records.values else None
-
-def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
-    try:
-        steamid64 = _steamid_to_steamid64(record.player.id)
-    except ValueError as e:
-        raise APIError('Malformed global API Steam ID') from e
-    player_url = _profile_url(steamid64) 
-    if record.teleports == 0:
-        points = record.pro_points
-        place = record.pro_rank
-    else:
-        points = record.nub_points
-        place = record.nub_rank
-    if not isinstance(points, float) or not isinstance(place, int):
-        raise APIError('Malformed global API PB')
-    submitted_at = datetime.fromtimestamp(record.id.time / 1000.0,
-                                          tz=timezone.utc)
-    return PersonalBest(id=record.id.int, steamid64=steamid64,
-                        player_name=record.player.name, player_url=player_url,
-                        map=api_map, time=record.time,
-                        teleports=record.teleports, points=int(points),
-                        point_scale=10000, place=place,
-                        date=submitted_at)
-
 class CS2API(API):
+    def __init__(self, mode: Mode, timeout: int | None=None) -> None:
+        super().__init__(mode, timeout)
+        self._session = AsyncSession(timeout=timeout)
+
     @override
     def has_tp_wrs(self) -> bool:
         return False
+
+    async def _top_record(self, latest=True, steamid64: int | None=None,
+                          api_map: APIMap | None=None,
+                          tp_type: Type | None=None) -> _APIRecord | None:
+        api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[self.mode]
+        params: dict[str, str] = {'mode': api_mode_id, 'top': 'true',
+                                  'limit': '1'}
+        if steamid64 is not None:
+            params['player'] = str(steamid64)
+        if api_map is not None:
+            if api_map.course is None:
+                raise APIError('Map has no course')
+            params['map'] = api_map.name
+            params['course'] = api_map.course
+        if tp_type == Type.TP:
+            params['has_teleports'] = 'true'
+        elif tp_type == Type.PRO:
+            params['has_teleports'] = 'false'
+        if latest:
+            params['sort_by'] = 'submission-date'
+            params['sort_order'] = 'descending'
+        else:
+            params['sort_by'] = 'time'
+            params['sort_order'] = 'ascending'
+        query = urlencode(params)
+        url = f'https://api.cs2kz.org/records?{query}'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API PBs (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API PBs (bad encoding)")
+        except RequestException as e:
+            raise APIConnectionError("Couldn't get global API PBs") from e
+
+        try:
+            records = _APIRecordResults.model_validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API PBs') from e
+        return records.values[0] if records.values else None
+
+    def _record_to_pb(self, record: _APIRecord, api_map: APIMap
+                      ) -> PersonalBest:
+        try:
+            steamid64 = _steamid_to_steamid64(record.player.id)
+        except ValueError as e:
+            raise APIError('Malformed global API Steam ID') from e
+        player_url = _profile_url(steamid64) 
+        if record.teleports == 0:
+            points = record.pro_points
+            place = record.pro_rank
+        else:
+            points = record.nub_points
+            place = record.nub_rank
+        if not isinstance(points, float) or not isinstance(place, int):
+            raise APIError('Malformed global API PB')
+        submitted_at = datetime.fromtimestamp(record.id.time / 1000.0,
+                                              tz=timezone.utc)
+        return PersonalBest(id=record.id.int, steamid64=steamid64,
+                            player_name=record.player.name,
+                            player_url=player_url, map=api_map,
+                            time=record.time, teleports=record.teleports,
+                            points=int(points), point_scale=10000,
+                            place=place, date=submitted_at)
 
     @override
     async def get_map(self, name: str, course: str | None=None,
@@ -290,18 +298,18 @@ class CS2API(API):
 
         if course_id is None:
             url = f'https://api.cs2kz.org/maps/{quote(name)}'
-            ctimeout = (ClientTimeout(total=self.timeout)
-                        if self.timeout is not None else None)
             try:
-                async with ClientSession(timeout=ctimeout) as session:
-                    async with session.get(url) as r:
-                        if r.status == 404:
-                            raise APIMapNotFoundError('Map not found')
-                        elif r.status != 200:
-                            raise APIError("Couldn't get global API map "
-                                           '(HTTP %d)' % r.status)
-                        json = await r.text()
-            except ClientError as e:
+                r = await self._session.get(url, stream=True)
+                if r.status_code == 404:
+                    raise APIMapNotFoundError('Map not found')
+                elif r.status_code != 200:
+                    raise APIError("Couldn't get global API map (HTTP %d)" %
+                                   r.status_code)
+                json = await r.text
+                if json is None:
+                    raise APIError("Couldn't get global API map "
+                                   '(bad encoding)')
+            except RequestException as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
             try:
@@ -348,59 +356,55 @@ class CS2API(API):
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
-        record = await _top_record(self.mode, steamid64=steamid64,
-                                   api_map=api_map, tp_type=tp_type,
-                                   timeout=self.timeout)
+        record = await self._top_record(steamid64=steamid64, api_map=api_map,
+                                        tp_type=tp_type)
         if record is None:
             return None
-        return _record_to_pb(record, api_map)
+        return self._record_to_pb(record, api_map)
 
     @override
     async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
                          ) -> PersonalBest | None:
-        record = await _top_record(self.mode, steamid64=steamid64,
-                                   tp_type=tp_type, timeout=self.timeout)
+        record = await self._top_record(steamid64=steamid64, tp_type=tp_type)
         if record is None:
             return None
         api_map = await self.get_map(record.map.name, record.course.name)
-        return _record_to_pb(record, api_map)
+        return self._record_to_pb(record, api_map)
 
     @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
-        record = await _top_record(self.mode, api_map=api_map, latest=False,
-                                   timeout=self.timeout)
+        record = await self._top_record(api_map=api_map, latest=False)
         if record is None:
             return []
-        pbs = [_record_to_pb(record, api_map)]
+        pbs = [self._record_to_pb(record, api_map)]
         pro_rank = record.pro_rank
         if pro_rank is not None:
             return pbs
-        pro_record = await _top_record(self.mode, api_map=api_map,
-                                       tp_type=Type.PRO, latest=False,
-                                       timeout=self.timeout)
+        pro_record = await self._top_record(api_map=api_map, tp_type=Type.PRO,
+                                            latest=False)
         if pro_record is not None:
-            pbs.append(_record_to_pb(pro_record, api_map))
+            pbs.append(self._record_to_pb(pro_record, api_map))
         return pbs
 
     @override
     async def get_profile(self, steamid64: int) -> Profile:
         player_url = _profile_url(steamid64)
         url = f'https://api.cs2kz.org/players/{steamid64}'
-        ctimeout = (ClientTimeout(total=self.timeout)
-                    if self.timeout is not None else None)
         try:
-            async with ClientSession(timeout=ctimeout) as session:
-                async with session.get(url) as r:
-                    if r.status == 200:
-                        json = await r.text()
-                    elif r.status == 404:
-                        return Profile(name=None, url=player_url,
-                                       mode=self.mode, rank=Rank.UNKNOWN,
-                                       points=0, average=None)
-                    else:
-                        raise APIError("Couldn't get global API profile "
-                                       '(HTTP %d)' % r.status)
-        except ClientError as e:
+            r = await self._session.get(url, stream=True)
+            if r.status_code == 200:
+                json = await r.text
+                if json is None:
+                    raise APIError("Couldn't get global API profile "
+                                   '(bad encoding)')
+            elif r.status_code == 404:
+                return Profile(name=None, url=player_url,
+                               mode=self.mode, rank=Rank.UNKNOWN,
+                               points=0, average=None)
+            else:
+                raise APIError("Couldn't get global API profile (HTTP %d)" %
+                               r.status_code)
+        except RequestException as e:
             raise APIConnectionError("Couldn't get global API PBs") from e
 
         try:

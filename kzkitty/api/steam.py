@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from niquests import aget, RequestException
 
 class SteamError(Exception):
     pass
@@ -17,15 +17,15 @@ class SteamProfile:
 
 async def _get_steam_profile(url: str, timeout: int | None=None
                              ) -> ElementTree.Element:
-    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
     try:
-        async with ClientSession(timeout=ctimeout) as session:
-            async with session.get(url) as r:
-                if r.status != 200 or r.content_type != 'text/xml':
-                    raise SteamError("Couldn't get Steam profile (HTTP %d)"
-                                     % r.status)
-                text = await r.text()
-    except ClientError as e:
+        r = await aget(url, stream=True, timeout=timeout)
+        if r.status_code != 200 or r.oheaders.content_type != 'text/xml':
+            raise SteamError("Couldn't get Steam profile (HTTP %d)"
+                             % r.status_code)
+        text = await r.text
+        if text is None:
+            raise SteamError("Couldn't get Steam profile (bad encoding)")
+    except RequestException as e:
         raise SteamError("Couldn't get Steam profile") from e
 
     try:

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from niquests import aget, AsyncSession, RequestException
 from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
@@ -57,13 +57,14 @@ _APIPlace = TypeAdapter(int)
 async def _vnl_tiers() -> dict[int, tuple[int, int]]:
     url = 'https://vnlkz.com/api/maps'
     try:
-        async with ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    raise APIError("Couldn't get VNL API maps (HTTP %d)",
-                                   r.status)
-                json = await r.text()
-    except ClientError as e:
+        r = await aget(url, stream=True)
+        if r.status_code != 200:
+            raise APIError("Couldn't get VNL API maps (HTTP %d)" %
+                           r.status_code)
+        json = await r.text
+        if json is None:
+            raise APIError("Couldn't get VNL API maps (bad encoding)")
+    except RequestException as e:
         raise APIError("Couldn't get VNL API maps") from e
     try:
         vnl_maps = _VNLMapList.validate_json(json)
@@ -71,37 +72,20 @@ async def _vnl_tiers() -> dict[int, tuple[int, int]]:
         raise APIError('Malformed VNL API maps') from e
     return {m.id: (m.tpTier, m.proTier) for m in vnl_maps}
 
-async def _vnl_tiers_for_map(name: str) -> tuple[int, int]:
-    url = f'https://vnlkz.com/api/maps/{quote(name)}'
-    try:
-        async with ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status == 404:
-                    return 10, 10
-                elif r.status != 200:
-                    raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
-                                   r.status)
-                json = await r.text()
-    except ClientError as e:
-        raise APIConnectionError("Couldn't get VNL map tiers") from e
-    try:
-        vnl_map = _VNLMap.model_validate_json(json)
-    except ValidationError as e:
-        raise APIError('Malformed VNL API map') from e
-    return vnl_map.tpTier, vnl_map.proTier
-
 async def refresh_csgo_db_maps() -> None:
     _logger.info('Downloading CSGO map info')
     url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
     try:
-        async with ClientSession() as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    _logger.error("Couldn't get global API maps (HTTP %d)",
-                                  r.status)
-                    return
-                json = await r.text()
-    except ClientError:
+        r = await aget(url, stream=True)
+        if r.status_code != 200:
+            _logger.error("Couldn't get global API maps (HTTP %d)",
+                          r.status_code)
+            return
+        json = await r.text
+        if json is None:
+            _logger.error("Couldn't get global API maps (bad encoding)")
+            return
+    except RequestException:
         _logger.exception("Couldn't get global API maps")
         return
 
@@ -201,106 +185,133 @@ def _thumbnail_url(name: str) -> str:
     return ('https://raw.githubusercontent.com/KZGlobalTeam/map-images/'
             f'public/webp/medium/{quote(name)}.webp')
 
-async def _records_for_steamid64(steamid64: int, mode: Mode,
-                                 tp_type: Type=Type.ANY,
-                                 map_name: str | None=None,
-                                 stage: int | None=None,
-                                 limit: int | None=None,
-                                 timeout: int | None=None
-                                 ) -> list[_APIRecord]:
-    api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
-                Mode.VNL: 'kz_vanilla'}[mode]
-    params: dict[str, str] = {'steamid64': str(steamid64), 'tickrate': '128',
-                              'modes_list_string': api_mode}
-    if stage is not None:
-        params['stage'] = str(stage)
-    if tp_type == Type.TP:
-        params['has_teleports'] = 'true'
-    elif tp_type == Type.PRO:
-        params['has_teleports'] = 'false'
-    if map_name is not None:
-        params['map_name'] = map_name
-    if limit is not None:
-        params['limit'] = str(limit)
-    else:
-        params['limit'] = '9999'
-    query = urlencode(params)
-    url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
-    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
-    try:
-        async with ClientSession(timeout=ctimeout) as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    raise APIError("Couldn't get global API PBs (HTTP %d)" %
-                                   r.status)
-                json = await r.text()
-    except ClientError as e:
-        raise APIConnectionError("Couldn't get global API PBs") from e
-
-    try:
-        return _APIRecordList.validate_json(json)
-    except ValidationError as e:
-        raise APIError('Malformed global API PBs') from e
-
-def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
-    player_url = _profile_url(record.steamid64, api_map.mode)
-    return PersonalBest(id=record.id, steamid64=record.steamid64,
-                        player_name=record.player_name, player_url=player_url,
-                        map=api_map, time=record.time,
-                        teleports=record.teleports, points=record.points,
-                        point_scale=1000, place=None, date=record.created_on)
-
-async def _place_for_pb(pb: PersonalBest, timeout: int | None=None) -> int:
-    url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
-    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
-    try:
-        async with ClientSession(timeout=ctimeout) as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    raise APIError("Couldn't get global API PB place "
-                                   '(HTTP %d)' % r.status)
-                json = await r.text()
-    except ClientError as e:
-        raise APIConnectionError("Couldn't get global API PB place") from e
-    try:
-        return _APIPlace.validate_json(json)
-    except ValidationError as e:
-        raise APIError('Malformed global API place') from e
-
-async def _record_for_map(api_map: APIMap, mode: Mode, tp_type: Type,
-                          stage: int | None=None, timeout: int | None=None
-                          ) -> _APIRecord | None:
-    api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
-                Mode.VNL: 'kz_vanilla'}[mode]
-    stage = stage or 0
-    params: dict[str, str] = {'map_name': api_map.name, 'stage': str(stage),
-                              'modes_list_string': api_mode, 'limit': '1'}
-    if tp_type == Type.TP:
-        params['has_teleports'] = 'true'
-    elif tp_type == Type.PRO:
-        params['has_teleports'] = 'false'
-    query = urlencode(params)
-    url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
-    ctimeout = ClientTimeout(total=timeout) if timeout is not None else None
-    try:
-        async with ClientSession(timeout=ctimeout) as session:
-            async with session.get(url) as r:
-                if r.status != 200:
-                    raise APIError("Couldn't get global API WR "
-                                   '(HTTP %d)' % r.status)
-                json = await r.text()
-    except ClientError as e:
-        raise APIConnectionError("Couldn't get global API WR") from e
-    try:
-        records = _APIRecordList.validate_json(json)
-    except ValidationError as e:
-        raise APIError('Malformed global API PBs') from e
-    return records[0] if records else None
-
 class CSGOAPI(API):
+    def __init__(self, mode: Mode, timeout: int | None=None) -> None:
+        super().__init__(mode, timeout)
+        self._session = AsyncSession(timeout=timeout)
+
     @override
     def has_tp_wrs(self) -> bool:
         return True
+
+    async def _records_for_steamid64(self, steamid64: int,
+                                     tp_type: Type=Type.ANY,
+                                     map_name: str | None=None,
+                                     stage: int | None=None,
+                                     limit: int | None=None,
+                                     ) -> list[_APIRecord]:
+        api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
+                    Mode.VNL: 'kz_vanilla'}[self.mode]
+        params: dict[str, str] = {'steamid64': str(steamid64),
+                                  'tickrate': '128',
+                                  'modes_list_string': api_mode}
+        if stage is not None:
+            params['stage'] = str(stage)
+        if tp_type == Type.TP:
+            params['has_teleports'] = 'true'
+        elif tp_type == Type.PRO:
+            params['has_teleports'] = 'false'
+        if map_name is not None:
+            params['map_name'] = map_name
+        if limit is not None:
+            params['limit'] = str(limit)
+        else:
+            params['limit'] = '9999'
+        query = urlencode(params)
+        url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API PBs (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API PBs (bad encoding)")
+        except RequestException as e:
+            raise APIConnectionError("Couldn't get global API PBs") from e
+
+        try:
+            return _APIRecordList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API PBs') from e
+
+    async def _record_for_map(self, api_map: APIMap, tp_type: Type,
+                              stage: int | None=None) -> _APIRecord | None:
+        api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
+                    Mode.VNL: 'kz_vanilla'}[self.mode]
+        stage = stage or 0
+        params: dict[str, str] = {'map_name': api_map.name,
+                                  'stage': str(stage),
+                                  'modes_list_string': api_mode,
+                                  'limit': '1'}
+        if tp_type == Type.TP:
+            params['has_teleports'] = 'true'
+        elif tp_type == Type.PRO:
+            params['has_teleports'] = 'false'
+        query = urlencode(params)
+        url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API WR (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API WR (bad encoding)")
+        except RequestException as e:
+            raise APIConnectionError("Couldn't get global API WR") from e
+        try:
+            records = _APIRecordList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API PBs') from e
+        return records[0] if records else None
+
+    def _record_to_pb(self, record: _APIRecord, api_map: APIMap
+                      ) -> PersonalBest:
+        player_url = _profile_url(record.steamid64, api_map.mode)
+        return PersonalBest(id=record.id, steamid64=record.steamid64,
+                            player_name=record.player_name,
+                            player_url=player_url, map=api_map,
+                            time=record.time, teleports=record.teleports,
+                            points=record.points, point_scale=1000,
+                            place=None, date=record.created_on)
+
+    async def _place_for_pb(self, pb: PersonalBest) -> int:
+        url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API PB place (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API PB place (bad encoding)")
+        except RequestException as e:
+            raise APIConnectionError("Couldn't get global API PB place") from e
+        try:
+            return _APIPlace.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API place') from e
+
+    async def _vnl_tiers(self, map_name: str) -> tuple[int, int]:
+        url = f'https://vnlkz.com/api/maps/{quote(map_name)}'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code == 404:
+                return 10, 10
+            elif r.status_code != 200:
+                raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get VNL map tiers (bad encoding)")
+        except RequestException as e:
+            raise APIConnectionError("Couldn't get VNL map tiers") from e
+        try:
+            vnl_map = _VNLMap.model_validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed VNL API map') from e
+        return vnl_map.tpTier, vnl_map.proTier
 
     @override
     async def get_map(self, name: str, course: str | None=None,
@@ -327,16 +338,16 @@ class CSGOAPI(API):
             vnl_pro_tier = db_map.vnl_pro_tier
         else:
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
-            ctimeout = (ClientTimeout(total=self.timeout)
-                        if self.timeout is not None else None)
             try:
-                async with ClientSession(timeout=ctimeout) as session:
-                    async with session.get(url) as r:
-                        if r.status != 200:
-                            raise APIError("Couldn't get global API map "
-                                           '(HTTP %d)' % r.status)
-                        json = await r.text()
-            except ClientError as e:
+                r = await self._session.get(url, stream=True)
+                if r.status_code != 200:
+                    raise APIError("Couldn't get global API map (HTTP %d)" %
+                                   r.status_code)
+                json = await r.text
+                if json is None:
+                    raise APIError("Couldn't get global API map "
+                                   '(bad encoding)')
+            except RequestException as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
             try:
@@ -362,7 +373,7 @@ class CSGOAPI(API):
                 max_tier = 10
                 if vnl_tier is None or vnl_pro_tier is None:
                     try:
-                        tier, pro_tier = await _vnl_tiers_for_map(name)
+                        tier, pro_tier = await self._vnl_tiers(name)
                     except APIError:
                         _logger.exception("Couldn't get VNL map tiers")
                         tier = pro_tier = None
@@ -382,11 +393,11 @@ class CSGOAPI(API):
 
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
-        records = await _records_for_steamid64(steamid64, self.mode,
-                                               map_name=api_map.name,
-                                               stage=api_map.bonus or 0,
-                                               limit=2, timeout=self.timeout)
-        pbs = [_record_to_pb(record, api_map) for record in records]
+        records = await self._records_for_steamid64(steamid64,
+                                                    map_name=api_map.name,
+                                                    stage=api_map.bonus or 0,
+                                                    limit=2)
+        pbs = [self._record_to_pb(record, api_map) for record in records]
         if not pbs:
             return None
 
@@ -397,7 +408,7 @@ class CSGOAPI(API):
         pbs.sort(key=lambda pb: pb.time)
         pb = pbs[0]
         try:
-            pb.place = await _place_for_pb(pb, timeout=self.timeout)
+            pb.place = await self._place_for_pb(pb)
         except APIError:
             _logger.exception("Couldn't get global API PB place")
         return pbs[0]
@@ -406,15 +417,15 @@ class CSGOAPI(API):
     async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
                          ) -> PersonalBest | None:
         if tp_type in {Type.TP, Type.ANY}:
-            records = await _records_for_steamid64(steamid64, self.mode,
-                                                   stage=0, tp_type=Type.TP,
-                                                   timeout=self.timeout)
+            records = await self._records_for_steamid64(steamid64,
+                                                        stage=0,
+                                                        tp_type=Type.TP)
         else:
             records = []
         if tp_type in {Type.PRO, Type.ANY}:
-            pros = await _records_for_steamid64(steamid64, self.mode,
-                                                stage=0, tp_type=Type.PRO,
-                                                timeout=self.timeout)
+            pros = await self._records_for_steamid64(steamid64,
+                                                     stage=0,
+                                                     tp_type=Type.PRO)
         else:
             pros = []
         records += pros
@@ -427,9 +438,9 @@ class CSGOAPI(API):
             api_map = await self.get_map(record.map_name)
         except APIMapError as e:
             raise APIError('Invalid map name from API PB') from e
-        pb = _record_to_pb(record, api_map)
+        pb = self._record_to_pb(record, api_map)
         try:
-            pb.place = await _place_for_pb(pb, timeout=self.timeout)
+            pb.place = await self._place_for_pb(pb)
         except APIError:
             _logger.exception("Couldn't get global API PB place")
         return pb
@@ -437,9 +448,9 @@ class CSGOAPI(API):
     @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
         bonus = api_map.bonus or 0
-        records = [await _record_for_map(api_map, self.mode, tp_type, bonus)
+        records = [await self._record_for_map(api_map, tp_type, bonus)
                    for tp_type in (Type.TP, Type.PRO)]
-        return [_record_to_pb(record, api_map)
+        return [self._record_to_pb(record, api_map)
                 for record in records if record]
 
     @override
@@ -451,16 +462,15 @@ class CSGOAPI(API):
                                   'mode_ids': api_mode_id, 'tickrates': '128'}
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/player_ranks?{query}'
-        ctimeout = (ClientTimeout(total=self.timeout)
-                    if self.timeout is not None else None)
         try:
-            async with ClientSession(timeout=ctimeout) as session:
-                async with session.get(url) as r:
-                    if r.status != 200:
-                        raise APIError("Couldn't get global API ranks "
-                                       '(HTTP %d)' % r.status)
-                    json = await r.text()
-        except ClientError as e:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API ranks (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API ranks (bad encoding)")
+        except RequestException as e:
             raise APIConnectionError("Couldn't get global API ranks") from e
         try:
             api_ranks = _APIPlayerRankList.validate_json(json)
