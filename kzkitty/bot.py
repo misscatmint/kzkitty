@@ -15,7 +15,7 @@ from tortoise.exceptions import DoesNotExist
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
-                            init_api, refresh_db_maps)
+                            init_api, refresh_map_db)
 from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
 from kzkitty.components import map_component, pb_component, profile_component
@@ -39,7 +39,7 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
     client.include(_slash_profile) # ty: ignore[invalid-argument-type]
 
     # This uses minutes because the hours and days parameters are broken in arc
-    refresh_db_loop = IntervalLoop(refresh_db_maps,
+    refresh_db_loop = IntervalLoop(refresh_map_db,
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
     async def startup(_: Client) -> None:

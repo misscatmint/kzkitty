@@ -4,15 +4,15 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
-from niquests import aget, AsyncSession, RequestException
+from niquests import AsyncSession, RequestException
 from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
-                                 APIMapNotFoundError, Rank, PersonalBest,
-                                 Profile)
+                                 APIMapNotFoundError, Rank,
+                                 RefreshMapDBResult, PersonalBest, Profile)
 from kzkitty.models import Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.csgo')
@@ -53,107 +53,6 @@ _VNLMapList = TypeAdapter(list[_VNLMap])
 _APIRecordList = TypeAdapter(list[_APIRecord])
 _APIPlayerRankList = TypeAdapter(list[_APIPlayerRank])
 _APIPlace = TypeAdapter(int)
-
-async def _vnl_tiers() -> dict[int, tuple[int, int]]:
-    url = 'https://vnlkz.com/api/maps'
-    try:
-        r = await aget(url, stream=True)
-        if r.status_code != 200:
-            raise APIError("Couldn't get VNL API maps (HTTP %d)" %
-                           r.status_code)
-        json = await r.text
-        if json is None:
-            raise APIError("Couldn't get VNL API maps (bad encoding)")
-    except RequestException as e:
-        raise APIError("Couldn't get VNL API maps") from e
-    try:
-        vnl_maps = _VNLMapList.validate_json(json)
-    except ValidationError as e:
-        raise APIError('Malformed VNL API maps') from e
-    return {m.id: (m.tpTier, m.proTier) for m in vnl_maps}
-
-async def refresh_csgo_db_maps() -> None:
-    _logger.info('Downloading CSGO map info')
-    url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
-    try:
-        r = await aget(url, stream=True)
-        if r.status_code != 200:
-            _logger.error("Couldn't get global API maps (HTTP %d)",
-                          r.status_code)
-            return
-        json = await r.text
-        if json is None:
-            _logger.error("Couldn't get global API maps (bad encoding)")
-            return
-    except RequestException:
-        _logger.exception("Couldn't get global API maps")
-        return
-
-    try:
-        api_maps = _APIMapList.validate_json(json)
-    except ValidationError:
-        _logger.exception('Malformed global API maps')
-        return
-
-    _logger.info('Downloading CSGO VNL map tiers')
-    try:
-        vnl_tiers: dict[int, tuple[int, int]] | None = await _vnl_tiers()
-    except APIError:
-        _logger.exception("Couldn't get VNL map tiers")
-        vnl_tiers = None
-
-    new = 0
-    updated = 0
-    deleted = 0
-    for api_map in api_maps:
-        async with in_transaction():
-            if not api_map.validated:
-                try:
-                    db_map = await Map.get(map_id=api_map.id, is_cs2=False)
-                except DoesNotExist:
-                    pass
-                else:
-                    await db_map.delete()
-                    deleted += 1
-                continue
-
-            if vnl_tiers is not None:
-                vnl_tier, vnl_pro_tier = vnl_tiers.get(api_map.id, (10, 10))
-            else:
-                vnl_tier = vnl_pro_tier = None
-            try:
-                db_map = await Map.get(map_id=api_map.id, is_cs2=False)
-            except DoesNotExist:
-                await Map(map_id=api_map.id, is_cs2=False, name=api_map.name,
-                          tier=api_map.difficulty,
-                          pro_tier=api_map.difficulty, vnl_tier=vnl_tier,
-                          vnl_pro_tier=vnl_pro_tier).save()
-                new += 1
-            else:
-                changed = False
-                if db_map.name != api_map.name:
-                    _logger.info('Updating name for map %s', api_map.name)
-                    db_map.name = api_map.name
-                    changed = True
-                if db_map.tier != api_map.difficulty:
-                    _logger.info('Updating tier for map %s', api_map.name)
-                    db_map.tier = db_map.pro_tier = api_map.difficulty
-                    changed = True
-                if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
-                    _logger.info('Updating VNL tier for map %s', api_map.name)
-                    db_map.vnl_tier = vnl_tier
-                    changed = True
-                if (db_map.vnl_pro_tier != vnl_pro_tier and
-                    vnl_pro_tier is not None):
-                    _logger.info('Updating VNL pro tier for map %s',
-                                 api_map.name)
-                    db_map.vnl_pro_tier = vnl_pro_tier
-                    changed = True
-                if changed:
-                    await db_map.save()
-                    updated += 1
-    _logger.info('Refreshed map database (%d new, %d updated, %d deleted)',
-                 new, updated, deleted)
 
 def _tier_name(tier: int | None, mode: Mode) -> str:
     if mode == Mode.VNL:
@@ -201,6 +100,124 @@ class CSGOAPI(API):
     @override
     async def close(self) -> None:
         await self._session.close()
+
+    async def _vnl_tiers_for_map(self, map_name: str) -> tuple[int, int]:
+        url = f'https://vnlkz.com/api/maps/{quote(map_name)}'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code == 404:
+                return 10, 10
+            elif r.status_code != 200:
+                raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get VNL map tiers (bad encoding)")
+        except RequestException as e:
+            raise APIConnectionError("Couldn't get VNL map tiers") from e
+        try:
+            vnl_map = _VNLMap.model_validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed VNL API map') from e
+        return vnl_map.tpTier, vnl_map.proTier
+
+    async def _vnl_tiers(self) -> dict[int, tuple[int, int]]:
+        url = 'https://vnlkz.com/api/maps'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get VNL API maps (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get VNL API maps (bad encoding)")
+        except RequestException as e:
+            raise APIError("Couldn't get VNL API maps") from e
+        try:
+            vnl_maps = _VNLMapList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed VNL API maps') from e
+        return {m.id: (m.tpTier, m.proTier) for m in vnl_maps}
+
+    @override
+    async def refresh_map_db(self) -> RefreshMapDBResult:
+        url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
+        try:
+            r = await self._session.get(url, stream=True)
+            if r.status_code != 200:
+                raise APIError("Couldn't get global API maps (HTTP %d)" %
+                               r.status_code)
+            json = await r.text
+            if json is None:
+                raise APIError("Couldn't get global API maps (bad encoding)")
+        except RequestException as e:
+            raise APIError("Couldn't get global API maps") from e
+
+        try:
+            api_maps = _APIMapList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API maps') from e
+
+        try:
+            vnl_tiers: dict[int, tuple[int, int]] | None = (
+                    await self._vnl_tiers())
+        except APIError:
+            _logger.exception("Couldn't get VNL map tiers")
+            vnl_tiers = None
+
+        new = updated = deleted = 0
+        for api_map in api_maps:
+            async with in_transaction():
+                if not api_map.validated:
+                    try:
+                        db_map = await Map.get(map_id=api_map.id,
+                                               is_cs2=False)
+                    except DoesNotExist:
+                        pass
+                    else:
+                        await db_map.delete()
+                        deleted += 1
+                    continue
+
+                if vnl_tiers is not None:
+                    vnl_tier, vnl_pro_tier = vnl_tiers.get(api_map.id,
+                                                           (10, 10))
+                else:
+                    vnl_tier = vnl_pro_tier = None
+                try:
+                    db_map = await Map.get(map_id=api_map.id, is_cs2=False)
+                except DoesNotExist:
+                    _logger.info('Adding map %s', api_map.name)
+                    await Map(map_id=api_map.id, is_cs2=False,
+                              name=api_map.name, tier=api_map.difficulty,
+                              pro_tier=api_map.difficulty, vnl_tier=vnl_tier,
+                              vnl_pro_tier=vnl_pro_tier).save()
+                    new += 1
+                else:
+                    changed = False
+                    if db_map.name != api_map.name:
+                        _logger.info('Updating name for map %s', api_map.name)
+                        db_map.name = api_map.name
+                        changed = True
+                    if db_map.tier != api_map.difficulty:
+                        _logger.info('Updating tier for map %s', api_map.name)
+                        db_map.tier = db_map.pro_tier = api_map.difficulty
+                        changed = True
+                    if db_map.vnl_tier != vnl_tier and vnl_tier is not None:
+                        _logger.info('Updating VNL tier for map %s',
+                                     api_map.name)
+                        db_map.vnl_tier = vnl_tier
+                        changed = True
+                    if (db_map.vnl_pro_tier != vnl_pro_tier and
+                        vnl_pro_tier is not None):
+                        _logger.info('Updating VNL pro tier for map %s',
+                                     api_map.name)
+                        db_map.vnl_pro_tier = vnl_pro_tier
+                        changed = True
+                    if changed:
+                        await db_map.save()
+                        updated += 1
+        return RefreshMapDBResult(new, updated, deleted)
 
     async def _records_for_steamid64(self, steamid64: int, mode: Mode,
                                      tp_type: Type=Type.ANY,
@@ -291,26 +308,6 @@ class CSGOAPI(API):
         except ValidationError as e:
             raise APIError('Malformed global API place') from e
 
-    async def _vnl_tiers(self, map_name: str) -> tuple[int, int]:
-        url = f'https://vnlkz.com/api/maps/{quote(map_name)}'
-        try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code == 404:
-                return 10, 10
-            elif r.status_code != 200:
-                raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
-                               r.status_code)
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get VNL map tiers (bad encoding)")
-        except RequestException as e:
-            raise APIConnectionError("Couldn't get VNL map tiers") from e
-        try:
-            vnl_map = _VNLMap.model_validate_json(json)
-        except ValidationError as e:
-            raise APIError('Malformed VNL API map') from e
-        return vnl_map.tpTier, vnl_map.proTier
-
     @override
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
@@ -371,7 +368,7 @@ class CSGOAPI(API):
                 max_tier = 10
                 if vnl_tier is None or vnl_pro_tier is None:
                     try:
-                        tier, pro_tier = await self._vnl_tiers(name)
+                        tier, pro_tier = await self._vnl_tiers_for_map(name)
                     except APIError:
                         _logger.exception("Couldn't get VNL map tiers")
                         tier = pro_tier = None
