@@ -2,8 +2,6 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Any
 
 from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
@@ -16,8 +14,8 @@ from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
-                            APIMapAmbiguousError, api_for_mode,
-                            refresh_db_maps)
+                            APIMapAmbiguousError, api_for_mode, close_api,
+                            init_api, refresh_db_maps)
 from kzkitty.api.steam import (SteamError, SteamValueError,
                                steamid64_for_profile)
 from kzkitty.components import map_component, pb_component, profile_component
@@ -45,12 +43,14 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int) -> None:
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
     async def startup(_: Client) -> None:
+        await init_api(timeout=_API_TIMEOUT)
         await init_db(db_url)
         asyncio.create_task(import_default_players())
         refresh_db_loop.start()
     client.add_startup_hook(startup)
 
     async def shutdown(_: Client) -> None:
+        await close_api()
         await close_db()
     client.add_shutdown_hook(shutdown)
 
@@ -112,18 +112,17 @@ async def _get_player(ctx: Context, player_member: Member | None=None
     except DoesNotExist:
         raise _PlayerNotFound
 
-@asynccontextmanager
 async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                    course: str | None=None, bonus: int | None=None
-                   ) -> AsyncIterator[tuple[API, APIMap]]:
+                   ) -> tuple[API, APIMap]:
     """Look up a map/course/bonus for a given mode.
 
     If the user hasn't explicitly chosen a specific mode, this will fall back
     to looking up the map for both CS:GO and CS2.
     """
-    api = api_for_mode(mode, timeout=_API_TIMEOUT)
+    api = api_for_mode(mode)
     try:
-        api_map = await api.get_map(map_name, course, bonus)
+        api_map = await api.get_map(map_name, mode, course, bonus)
     except (APIConnectionError, APIMapNotFoundError) as e:
         if mode_name is not None:
             raise
@@ -134,12 +133,9 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                 Mode.VNL2: Mode.VNL}[mode]
         if isinstance(e, APIConnectionError):
             _logger.exception('API connection failure during map lookup')
-        fallback_api = api_for_mode(mode, timeout=_API_TIMEOUT)
-        try:
-            api_map = await fallback_api.get_map(map_name, course, bonus)
-            yield fallback_api, api_map
-        finally:
-            await fallback_api.close()
+        api = api_for_mode(mode)
+        api_map = await api.get_map(map_name, mode, course, bonus)
+        return api, api_map
     else:
         # If the player has their mode set to VNL and they do /map on
         # a VNL-impossible map, show KZT/CKZ times if they didn't explicitly
@@ -147,16 +143,9 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
         if (bonus is None and mode_name is None and
             mode in {Mode.VNL, Mode.VNL2} and api_map.tier == 10):
             mode = Mode.KZT if mode == Mode.VNL else Mode.CKZ
-            fallback_api = api_for_mode(mode, timeout=_API_TIMEOUT)
-            try:
-                api_map = await fallback_api.get_map(map_name, course, bonus)
-                yield fallback_api, api_map
-            finally:
-                await fallback_api.close()
-        else:
-            yield api, api_map
-    finally:
-        await api.close()
+            api = api_for_mode(mode)
+            api_map = await api.get_map(map_name, mode, course, bonus)
+        return api, api_map
 
 async def _handle_error(ctx: Context, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
@@ -241,9 +230,8 @@ async def _slash_pb(ctx: Context,
     """Look up a personal best time"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    async with _get_map(mode, mode_name, map_name, course,
-                        bonus) as (api, api_map):
-        pb = await api.get_pb(player.steamid64, api_map, Type(type_name))
+    api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
+    pb = await api.get_pb(player.steamid64, api_map, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
@@ -261,8 +249,8 @@ async def _slash_latest(ctx: Context,
     """Look up the user's latest personal best for a given game mode"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    async with api_for_mode(mode, timeout=_API_TIMEOUT) as api:
-        pb = await api.get_latest(player.steamid64, Type(type_name))
+    api = api_for_mode(mode)
+    pb = await api.get_latest(player.steamid64, mode, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
         return
@@ -288,9 +276,8 @@ async def _slash_map(ctx: Context,
         else:
             mode = player.mode
 
-    async with _get_map(mode, mode_name, map_name, course,
-                        bonus) as (api, api_map):
-        wrs = await api.get_wrs(api_map)
+    api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
+    wrs = await api.get_wrs(api_map)
     component = await map_component(api_map, wrs, api.has_tp_wrs())
     await ctx.respond(component=component)
 
@@ -304,8 +291,8 @@ async def _slash_profile(ctx: Context,
     """Look up the user's profile information"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    async with api_for_mode(mode, timeout=_API_TIMEOUT) as api:
-        profile = await api.get_profile(player.steamid64)
+    api = api_for_mode(mode)
+    profile = await api.get_profile(player.steamid64, mode)
     component = await profile_component(profile, player, ctx.user,
                                         steam_timeout=_STEAM_TIMEOUT)
     await ctx.respond(component=component)

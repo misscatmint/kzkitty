@@ -186,8 +186,8 @@ def _thumbnail_url(name: str) -> str:
             f'public/webp/medium/{quote(name)}.webp')
 
 class CSGOAPI(API):
-    def __init__(self, mode: Mode, timeout: int | None=None) -> None:
-        super().__init__(mode, timeout)
+    def __init__(self, timeout: int | None=None) -> None:
+        super().__init__(timeout)
         self._session = AsyncSession(timeout=timeout)
 
     @override
@@ -198,14 +198,14 @@ class CSGOAPI(API):
     def has_tp_wrs(self) -> bool:
         return True
 
-    async def _records_for_steamid64(self, steamid64: int,
+    async def _records_for_steamid64(self, steamid64: int, mode: Mode,
                                      tp_type: Type=Type.ANY,
                                      map_name: str | None=None,
                                      stage: int | None=None,
                                      limit: int | None=None,
                                      ) -> list[_APIRecord]:
         api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
-                    Mode.VNL: 'kz_vanilla'}[self.mode]
+                    Mode.VNL: 'kz_vanilla'}[mode]
         params: dict[str, str] = {'steamid64': str(steamid64),
                                   'tickrate': '128',
                                   'modes_list_string': api_mode}
@@ -242,7 +242,7 @@ class CSGOAPI(API):
     async def _record_for_map(self, api_map: APIMap, tp_type: Type,
                               stage: int | None=None) -> _APIRecord | None:
         api_mode = {Mode.KZT: 'kz_timer', Mode.SKZ: 'kz_simple',
-                    Mode.VNL: 'kz_vanilla'}[self.mode]
+                    Mode.VNL: 'kz_vanilla'}[api_map.mode]
         stage = stage or 0
         params: dict[str, str] = {'map_name': api_map.name,
                                   'stage': str(stage),
@@ -318,7 +318,7 @@ class CSGOAPI(API):
         return vnl_map.tpTier, vnl_map.proTier
 
     @override
-    async def get_map(self, name: str, course: str | None=None,
+    async def get_map(self, name: str, mode: Mode, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
         if not re.fullmatch('[A-za-z0-9_]+', name):
             raise APIMapError('Invalid map name')
@@ -373,7 +373,7 @@ class CSGOAPI(API):
         if bonus:
             tier = tier_name = pro_tier = pro_tier_name = None
         else:
-            if self.mode == Mode.VNL:
+            if mode == Mode.VNL:
                 max_tier = 10
                 if vnl_tier is None or vnl_pro_tier is None:
                     try:
@@ -384,20 +384,20 @@ class CSGOAPI(API):
                 else:
                     tier = vnl_tier
                     pro_tier = vnl_pro_tier
-            tier_name = _tier_name(tier, self.mode)
-            pro_tier_name = _tier_name(pro_tier, self.mode)
+            tier_name = _tier_name(tier, mode)
+            pro_tier_name = _tier_name(pro_tier, mode)
 
-        url = _map_url(name, self.mode, bonus or 0)
+        url = _map_url(name, mode, bonus or 0)
         thumbnail_url = _thumbnail_url(name)
 
-        return APIMap(name=name, mode=self.mode, bonus=bonus or None,
+        return APIMap(name=name, mode=mode, bonus=bonus or None,
                       course=None, tier=tier, tier_name=tier_name,
                       pro_tier=pro_tier, pro_tier_name=pro_tier_name,
                       max_tier=max_tier, url=url, thumbnail_url=thumbnail_url)
 
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
-        records = await self._records_for_steamid64(steamid64,
+        records = await self._records_for_steamid64(steamid64, api_map.mode,
                                                     map_name=api_map.name,
                                                     stage=api_map.bonus or 0,
                                                     limit=2)
@@ -418,16 +418,16 @@ class CSGOAPI(API):
         return pbs[0]
 
     @override
-    async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
-                         ) -> PersonalBest | None:
+    async def get_latest(self, steamid64: int, mode: Mode,
+                         tp_type: Type=Type.ANY) -> PersonalBest | None:
         if tp_type in {Type.TP, Type.ANY}:
-            records = await self._records_for_steamid64(steamid64,
+            records = await self._records_for_steamid64(steamid64, mode,
                                                         stage=0,
                                                         tp_type=Type.TP)
         else:
             records = []
         if tp_type in {Type.PRO, Type.ANY}:
-            pros = await self._records_for_steamid64(steamid64,
+            pros = await self._records_for_steamid64(steamid64, mode,
                                                      stage=0,
                                                      tp_type=Type.PRO)
         else:
@@ -439,7 +439,7 @@ class CSGOAPI(API):
         records.sort(key=lambda r: r.created_on, reverse=True)
         record = records[0]
         try:
-            api_map = await self.get_map(record.map_name)
+            api_map = await self.get_map(record.map_name, mode)
         except APIMapError as e:
             raise APIError('Invalid map name from API PB') from e
         pb = self._record_to_pb(record, api_map)
@@ -458,10 +458,10 @@ class CSGOAPI(API):
                 for record in records if record]
 
     @override
-    async def get_profile(self, steamid64: int) -> Profile:
-        player_url = _profile_url(steamid64, self.mode)
+    async def get_profile(self, steamid64: int, mode: Mode) -> Profile:
+        player_url = _profile_url(steamid64, mode)
         api_mode_id = {Mode.KZT: '200', Mode.SKZ: '201',
-                       Mode.VNL: '202'}[self.mode]
+                       Mode.VNL: '202'}[mode]
         params: dict[str, str] = {'steamid64s': str(steamid64), 'stages': '0',
                                   'mode_ids': api_mode_id, 'tickrates': '128'}
         query = urlencode(params)
@@ -481,12 +481,12 @@ class CSGOAPI(API):
         except ValidationError as e:
             raise APIError('Malformed global API ranks') from e
         if not api_ranks:
-            return Profile(name=None, url=player_url, mode=self.mode,
+            return Profile(name=None, url=player_url, mode=mode,
                            rank=Rank.NEW, points=0, average=0)
 
         api_rank = api_ranks[0]
 
-        if self.mode == Mode.VNL:
+        if mode == Mode.VNL:
             thresholds = [(600000, Rank.LEGEND),
                           (400000, Rank.MASTER),
                           (300000, Rank.PRO),
@@ -495,7 +495,7 @@ class CSGOAPI(API):
                           (180000, Rank.EXPERT),
                           (160000, Rank.EXPERT_MINUS),
                           (140000, Rank.SKILLED_PLUS)]
-        elif self.mode == Mode.SKZ:
+        elif mode == Mode.SKZ:
             thresholds = [(800000, Rank.LEGEND),
                           (500000, Rank.MASTER),
                           (400000, Rank.PRO),
@@ -532,5 +532,5 @@ class CSGOAPI(API):
             if api_rank.points >= threshold:
                 break
         return Profile(name=api_rank.player_name, url=player_url,
-                       mode=self.mode, rank=rank, points=api_rank.points,
+                       mode=mode, rank=rank, points=api_rank.points,
                        average=int(api_rank.average))

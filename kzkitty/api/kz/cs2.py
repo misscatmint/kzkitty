@@ -183,8 +183,8 @@ def _profile_url(steamid64: int) -> str:
     return f'https://cs2kz.org/profile/{steamid64}'
 
 class CS2API(API):
-    def __init__(self, mode: Mode, timeout: int | None=None) -> None:
-        super().__init__(mode, timeout)
+    def __init__(self, timeout: int | None=None) -> None:
+        super().__init__(timeout)
         self._session = AsyncSession(timeout=timeout)
 
     @override
@@ -195,10 +195,11 @@ class CS2API(API):
     def has_tp_wrs(self) -> bool:
         return False
 
-    async def _top_record(self, latest=True, steamid64: int | None=None,
+    async def _top_record(self, mode: Mode, latest=True,
+                          steamid64: int | None=None,
                           api_map: APIMap | None=None,
                           tp_type: Type | None=None) -> _APIRecord | None:
-        api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[self.mode]
+        api_mode_id = {Mode.CKZ: 'classic', Mode.VNL2: 'vanilla'}[mode]
         params: dict[str, str] = {'mode': api_mode_id, 'top': 'true',
                                   'limit': '1'}
         if steamid64 is not None:
@@ -262,7 +263,7 @@ class CS2API(API):
                             place=place, date=submitted_at)
 
     @override
-    async def get_map(self, name: str, course: str | None=None,
+    async def get_map(self, name: str, mode: Mode, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
         if bonus is not None:
             raise APIMapError("Bonuses aren't supported on CS2. "
@@ -293,7 +294,7 @@ class CS2API(API):
             if db_course is not None:
                 course_id = db_course.course_id
                 course_name = db_course.name
-                if self.mode == Mode.VNL2:
+                if mode == Mode.VNL2:
                     tier = db_course.vnl_tier
                     pro_tier = db_course.vnl_pro_tier
                 else:
@@ -340,7 +341,7 @@ class CS2API(API):
 
             course_filters = course_info.filters
             course_filter = {Mode.CKZ: course_filters.classic,
-                             Mode.VNL2: course_filters.vanilla}[self.mode]
+                             Mode.VNL2: course_filters.vanilla}[mode]
             tier = _tier_num(course_filter.nub_tier)
             pro_tier = _tier_num(course_filter.pro_tier)
 
@@ -352,7 +353,7 @@ class CS2API(API):
                          'cs2kz-images/public/webp/medium/'
                          f'{quote(name)}/{course_id}.webp')
 
-        return APIMap(name=name, mode=self.mode, bonus=None,
+        return APIMap(name=name, mode=mode, bonus=None,
                       course=course_name, tier=tier, tier_name=tier_name,
                       pro_tier=tier, pro_tier_name=pro_tier_name, max_tier=7,
                       thumbnail_url=thumbnail_url, url=url)
@@ -360,38 +361,43 @@ class CS2API(API):
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
-        record = await self._top_record(steamid64=steamid64, api_map=api_map,
+        record = await self._top_record(mode=api_map.mode,
+                                        steamid64=steamid64, api_map=api_map,
                                         tp_type=tp_type)
         if record is None:
             return None
         return self._record_to_pb(record, api_map)
 
     @override
-    async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
-                         ) -> PersonalBest | None:
-        record = await self._top_record(steamid64=steamid64, tp_type=tp_type)
+    async def get_latest(self, steamid64: int, mode: Mode,
+                         tp_type: Type=Type.ANY) -> PersonalBest | None:
+        record = await self._top_record(mode=mode, steamid64=steamid64,
+                                        tp_type=tp_type)
         if record is None:
             return None
-        api_map = await self.get_map(record.map.name, record.course.name)
+        api_map = await self.get_map(record.map.name, mode,
+                                     course=record.course.name)
         return self._record_to_pb(record, api_map)
 
     @override
     async def get_wrs(self, api_map: APIMap) -> list[PersonalBest]:
-        record = await self._top_record(api_map=api_map, latest=False)
+        record = await self._top_record(mode=api_map.mode, api_map=api_map,
+                                        latest=False)
         if record is None:
             return []
         pbs = [self._record_to_pb(record, api_map)]
         pro_rank = record.pro_rank
         if pro_rank is not None:
             return pbs
-        pro_record = await self._top_record(api_map=api_map, tp_type=Type.PRO,
+        pro_record = await self._top_record(mode=api_map.mode,
+                                            api_map=api_map, tp_type=Type.PRO,
                                             latest=False)
         if pro_record is not None:
             pbs.append(self._record_to_pb(pro_record, api_map))
         return pbs
 
     @override
-    async def get_profile(self, steamid64: int) -> Profile:
+    async def get_profile(self, steamid64: int, mode: Mode) -> Profile:
         player_url = _profile_url(steamid64)
         url = f'https://api.cs2kz.org/players/{steamid64}'
         try:
@@ -403,7 +409,7 @@ class CS2API(API):
                                    '(bad encoding)')
             elif r.status_code == 404:
                 return Profile(name=None, url=player_url,
-                               mode=self.mode, rank=Rank.UNKNOWN,
+                               mode=mode, rank=Rank.UNKNOWN,
                                points=0, average=None)
             else:
                 raise APIError("Couldn't get global API profile (HTTP %d)" %
@@ -417,7 +423,7 @@ class CS2API(API):
             raise APIError('Malformed global API profile') from e
 
         rating = {Mode.CKZ: profile.ckz_rating,
-                  Mode.VNL2: profile.vnl_rating}[self.mode]
+                  Mode.VNL2: profile.vnl_rating}[mode]
         points = rating / 10
         if points == 0.0:
             rank = Rank.NEW
@@ -435,5 +441,5 @@ class CS2API(API):
             for threshold, rank in thresholds:
                 if points >= threshold:
                     break
-        return Profile(name=profile.name, url=player_url, mode=self.mode,
+        return Profile(name=profile.name, url=player_url, mode=mode,
                        rank=rank, points=int(points), average=None)

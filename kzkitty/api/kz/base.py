@@ -9,6 +9,9 @@ from kzkitty.models import Map, Mode, Type
 class APIError(Exception):
     pass
 
+class APIUnitializedError(APIError):
+    pass
+
 class APIConnectionError(APIError):
     pass
 
@@ -87,8 +90,7 @@ class Profile:
     url: str
 
 class API(ABC):
-    def __init__(self, mode: Mode, timeout: int | None=None) -> None:
-        self.mode: Mode = mode
+    def __init__(self, timeout: int | None=None) -> None:
         self.timeout: int | None = timeout
 
     async def __aenter__(self) -> Self:
@@ -106,7 +108,7 @@ class API(ABC):
         ...
 
     @abstractmethod
-    async def get_map(self, name: str, course: str | None=None,
+    async def get_map(self, name: str, mode: Mode, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
         ...
 
@@ -116,8 +118,8 @@ class API(ABC):
         ...
 
     @abstractmethod
-    async def get_latest(self, steamid64: int, tp_type: Type=Type.ANY
-                         ) -> PersonalBest | None:
+    async def get_latest(self, steamid64: int, mode: Mode,
+                         tp_type: Type=Type.ANY) -> PersonalBest | None:
         ...
 
     @abstractmethod
@@ -125,5 +127,5 @@ class API(ABC):
         ...
 
     @abstractmethod
-    async def get_profile(self, steamid64: int) -> Profile:
+    async def get_profile(self, steamid64: int, mode: Mode) -> Profile:
         ...
