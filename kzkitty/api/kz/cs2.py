@@ -191,10 +191,6 @@ class CS2API(API):
     async def close(self) -> None:
         await self._session.close()
 
-    @override
-    def has_tp_wrs(self) -> bool:
-        return False
-
     async def _top_record(self, mode: Mode, latest=True,
                           steamid64: int | None=None,
                           api_map: APIMap | None=None,
@@ -356,7 +352,7 @@ class CS2API(API):
         return APIMap(name=name, mode=mode, bonus=None,
                       course=course_name, tier=tier, tier_name=tier_name,
                       pro_tier=tier, pro_tier_name=pro_tier_name, max_tier=7,
-                      thumbnail_url=thumbnail_url, url=url)
+                      has_tp_wrs=False, url=url, thumbnail_url=thumbnail_url)
 
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
