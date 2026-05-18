@@ -185,6 +185,14 @@ def _thumbnail_url(name: str) -> str:
     return ('https://raw.githubusercontent.com/KZGlobalTeam/map-images/'
             f'public/webp/medium/{quote(name)}.webp')
 
+def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
+    player_url = _profile_url(record.steamid64, api_map.mode)
+    return PersonalBest(id=record.id, steamid64=record.steamid64,
+                        player_name=record.player_name, player_url=player_url,
+                        map=api_map, time=record.time,
+                        teleports=record.teleports, points=record.points,
+                        point_scale=1000, place=None, date=record.created_on)
+
 class CSGOAPI(API):
     def __init__(self, timeout: int | None=None) -> None:
         super().__init__(timeout)
@@ -265,16 +273,6 @@ class CSGOAPI(API):
         except ValidationError as e:
             raise APIError('Malformed global API PBs') from e
         return records[0] if records else None
-
-    def _record_to_pb(self, record: _APIRecord, api_map: APIMap
-                      ) -> PersonalBest:
-        player_url = _profile_url(record.steamid64, api_map.mode)
-        return PersonalBest(id=record.id, steamid64=record.steamid64,
-                            player_name=record.player_name,
-                            player_url=player_url, map=api_map,
-                            time=record.time, teleports=record.teleports,
-                            points=record.points, point_scale=1000,
-                            place=None, date=record.created_on)
 
     async def _place_for_pb(self, pb: PersonalBest) -> int:
         url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
@@ -398,7 +396,7 @@ class CSGOAPI(API):
                                                     map_name=api_map.name,
                                                     stage=api_map.bonus or 0,
                                                     limit=2)
-        pbs = [self._record_to_pb(record, api_map) for record in records]
+        pbs = [_record_to_pb(record, api_map) for record in records]
         if not pbs:
             return None
 
@@ -439,7 +437,7 @@ class CSGOAPI(API):
             api_map = await self.get_map(record.map_name, mode)
         except APIMapError as e:
             raise APIError('Invalid map name from API PB') from e
-        pb = self._record_to_pb(record, api_map)
+        pb = _record_to_pb(record, api_map)
         try:
             pb.place = await self._place_for_pb(pb)
         except APIError:
@@ -451,7 +449,7 @@ class CSGOAPI(API):
         bonus = api_map.bonus or 0
         records = [await self._record_for_map(api_map, tp_type, bonus)
                    for tp_type in (Type.TP, Type.PRO)]
-        return [self._record_to_pb(record, api_map)
+        return [_record_to_pb(record, api_map)
                 for record in records if record]
 
     @override
