@@ -121,7 +121,8 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
 class CS2API(API):
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncSession = AsyncSession(timeout=timeout)
+        self._session: AsyncSession = AsyncSession(disable_http3=True,
+                                                   timeout=timeout)
 
     @override
     async def close(self) -> None:
