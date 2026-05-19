@@ -18,6 +18,15 @@ typeCheckingMode = "standard"
 reportImplicitStringConcatenation = false
 reportUnusedCallResult = false
 
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+select = ["A", "ANN", "ARG", "BLE", "C4", "DTZ", "E", "ERA", "F", "FIX",
+          "FURB", "ISC", "INP", "G", "PERF", "PIE", "RSE", "RUF", "S", "SIM",
+          "SLF", "T20", "TID", "UP", "W"]
+ignore = ["S314", "UP031"]
+
 [tool.uv.sources.hikari]
 git = "https://github.com/hikari-py/hikari.git"
 rev = "222aab1bcd54bba9292d0087271a289a0742a56b"

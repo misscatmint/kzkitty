@@ -21,8 +21,8 @@ async def _avatar_url(player: Player) -> str | None:
         return None
     return steam_profile.avatar_url
 
-async def _avatar_container(avatar_url: str | None, accent_color: Color, body: str
-                            ) -> ContainerComponentBuilder:
+async def _avatar_container(avatar_url: str | None, accent_color: Color,
+                            body: str) -> ContainerComponentBuilder:
     container = ContainerComponentBuilder(accent_color=accent_color)
     if avatar_url is not None:
         thumbnail = ThumbnailComponentBuilder(media=avatar_url)
@@ -44,7 +44,7 @@ def _formattime(td: timedelta) -> str:
         s = '%d' % ss
     if td.days:
         def plural(n: int) -> tuple[int, str]:
-            return n, abs(n) != 1 and 's' or ''
+            return n, 's' if abs(n) != 1 else ''
         s = ('%d day%s, ' % plural(td.days)) + s
     if td.microseconds:
         s = s + '.%06d' % round(td.microseconds, -3)
@@ -114,10 +114,7 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
     else:
         points = f'{pb.points:,}'
 
-    if medal is not None:
-        body = f'## {medal} '
-    else:
-        body = '## '
+    body = f'## {medal} ' if medal is not None else '## '
     body += (f'[{player_name}]({pb.player_url}) on '
              f'[{pb.map.name}]({pb.map.url})')
     body += f"""
@@ -130,10 +127,7 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
     body += f"""**Points**: {points}
 """
 
-    if pb.teleports == 0:
-        accent_color = Color(0x1e90ff)
-    else:
-        accent_color = Color(0xffa500)
+    accent_color = Color(0x1e90ff) if pb.teleports == 0 else Color(0xffa500)
     avatar_url = await _avatar_url(player)
     container = await _avatar_container(avatar_url, accent_color, body)
     gallery = MediaGalleryComponentBuilder()

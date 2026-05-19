@@ -27,6 +27,8 @@ _logger = logging.getLogger('kzkitty.bot')
 _ClientT = Client[Any]
 _ContextT = Context[Any]
 
+_tasks = set()
+
 def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
     """Register bot commands and hooks"""
@@ -47,7 +49,9 @@ def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
         await init_api(timeout=api_timeout)
         await init_steam(timeout=steam_timeout)
         await init_db(db_url)
-        asyncio.create_task(import_default_players())
+        task = asyncio.create_task(import_default_players())
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
         refresh_db_loop.start()
     client.add_startup_hook(startup)
 

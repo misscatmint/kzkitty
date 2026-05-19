@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
@@ -29,7 +29,7 @@ class _VNLMap(BaseModel):
     proTier: int
 
 def _utc_datetime(value: datetime) -> datetime:
-    return value.replace(tzinfo=timezone.utc)
+    return value.replace(tzinfo=UTC)
 
 class _APIRecord(BaseModel):
     id: int
@@ -300,7 +300,8 @@ class CSGOAPI(API):
                                r.status_code)
             json = await r.text
             if json is None:
-                raise APIError("Couldn't get global API PB place (bad encoding)")
+                raise APIError("Couldn't get global API PB place "
+                               "(bad encoding)")
         except RequestException as e:
             raise APIConnectionError("Couldn't get global API PB place") from e
         try:

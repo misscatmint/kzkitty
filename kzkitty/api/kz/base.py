@@ -22,7 +22,7 @@ class APIMapNotFoundError(APIMapError):
     pass
 
 class APIMapAmbiguousError(APIMapError):
-    def __init__(self, db_maps: list[Map]):
+    def __init__(self, db_maps: list[Map]) -> None:
         self.db_maps: list[Map] = db_maps
         super().__init__()
 
