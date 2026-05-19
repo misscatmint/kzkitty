@@ -27,7 +27,7 @@ _logger = logging.getLogger('kzkitty.bot')
 _ClientT = Client[Any]
 _ContextT = Context[Any]
 
-_tasks = set()
+_tasks: set[asyncio.Task[Any]] = set()
 
 def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
