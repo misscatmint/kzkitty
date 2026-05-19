@@ -120,9 +120,9 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
                         point_scale=10000, place=place, date=submitted_at)
 
 class CS2API(API):
+    @override
     def __init__(self, timeout: int | None=None) -> None:
-        super().__init__(timeout)
-        self._session = AsyncSession(timeout=timeout)
+        self._session: AsyncSession = AsyncSession(timeout=timeout)
 
     @override
     async def close(self) -> None:
@@ -219,7 +219,7 @@ class CS2API(API):
 
         return RefreshMapDBResult(new, updated, deleted)
 
-    async def _top_record(self, mode: Mode, latest=True,
+    async def _top_record(self, mode: Mode, latest: bool=True,
                           steamid64: int | None=None,
                           api_map: APIMap | None=None,
                           tp_type: Type | None=None) -> _APIRecord | None:

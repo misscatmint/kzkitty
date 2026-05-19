@@ -93,9 +93,9 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
                         point_scale=1000, place=None, date=record.created_on)
 
 class CSGOAPI(API):
+    @override
     def __init__(self, timeout: int | None=None) -> None:
-        super().__init__(timeout)
-        self._session = AsyncSession(timeout=timeout)
+        self._session: AsyncSession = AsyncSession(timeout=timeout)
 
     @override
     async def close(self) -> None:
@@ -387,6 +387,7 @@ class CSGOAPI(API):
                       max_tier=max_tier, has_tp_wrs=True, url=url,
                       thumbnail_url=thumbnail_url)
 
+    @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
         records = await self._records_for_steamid64(steamid64, api_map.mode,
