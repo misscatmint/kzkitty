@@ -603,9 +603,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hikari", extras = ["server", "speedups"], git = "https://github.com/hikari-py/hikari.git?rev=222aab1bcd54bba9292d0087271a289a0742a56b" },
-    { name = "hikari-arc", extras = ["rest"], specifier = ">=2.2.0" },
+    { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.0" },
     { name = "niquests", extras = ["brotli", "http3", "zstd"], specifier = ">=3.18.8" },
-    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "pydantic", specifier = ">=2.13.4" },
     { name = "tortoise-orm", specifier = ">=1.1.7" },
     { name = "uvloop", specifier = ">=0.22.1" },
 ]
