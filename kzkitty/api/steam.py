@@ -20,7 +20,8 @@ class SteamProfile:
 
 class Steam:
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncSession = AsyncSession(timeout=timeout)
+        self._session: AsyncSession = AsyncSession(disable_http3=True,
+                                                   timeout=timeout)
 
     async def close(self) -> None:
         await self._session.close()

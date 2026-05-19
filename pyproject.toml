@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "hikari-arc[rest]>=2.3.0",
     "hikari[server,speedups]>=2.5.0",
-    "niquests[brotli,http3,zstd]>=3.18.8",
+    "niquests[brotli,zstd]>=3.18.8",
     "pydantic>=2.13.4",
     "tortoise-orm>=1.1.7",
     "uvloop>=0.22.1",
