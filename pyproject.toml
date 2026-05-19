@@ -15,6 +15,8 @@ dependencies = [
 
 [tool.basedpyright]
 typeCheckingMode = "standard"
+reportImplicitStringConcatenation = false
+reportUnusedCallResult = false
 
 [tool.uv.sources.hikari]
 git = "https://github.com/hikari-py/hikari.git"

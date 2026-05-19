@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Self
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
@@ -21,13 +20,7 @@ class SteamProfile:
 
 class Steam:
     def __init__(self, timeout: int | None=None) -> None:
-        self._session = AsyncSession(timeout=timeout)
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(self, _exc, _val, _tb) -> None:
-        await self.close()
+        self._session: AsyncSession = AsyncSession(timeout=timeout)
 
     async def close(self) -> None:
         await self._session.close()

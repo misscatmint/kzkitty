@@ -24,7 +24,10 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 
 _logger = logging.getLogger('kzkitty.bot')
 
-def _setup(client: Client, db_url: str, refresh_db_hours: int,
+_ClientT = Client[Any]
+_ContextT = Context[Any]
+
+def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
@@ -40,7 +43,7 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int,
     refresh_db_loop = IntervalLoop(refresh_map_db,
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
-    async def startup(_: Client) -> None:
+    async def startup(_: _ClientT) -> None:
         await init_api(timeout=api_timeout)
         await init_steam(timeout=steam_timeout)
         await init_db(db_url)
@@ -48,7 +51,7 @@ def _setup(client: Client, db_url: str, refresh_db_hours: int,
         refresh_db_loop.start()
     client.add_startup_hook(startup)
 
-    async def shutdown(_: Client) -> None:
+    async def shutdown(_: _ClientT) -> None:
         await close_api()
         await close_steam()
         await close_db()
@@ -73,7 +76,7 @@ def runrest(host: str, port: int, discord_token: str, db_url: str,
     _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout)
     bot.run(host=host, port=port, check_for_updates=False)
 
-async def _autocomplete_map(data: AutocompleteData[Client, str]) -> list[str]:
+async def _autocomplete_map(data: AutocompleteData[_ClientT, str]) -> list[str]:
     """Autocomplete map names for slash commands"""
     if not data.focused_value:
         return []
@@ -101,7 +104,7 @@ _BonusParams = IntParams('Bonus', min=1)
 class _PlayerNotFound(Exception):
     pass
 
-async def _get_player(ctx: Context, player_member: Member | None=None
+async def _get_player(ctx: _ContextT, player_member: Member | None=None
                       ) -> Player:
     """Look up a registered player.
 
@@ -149,7 +152,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
             api_map = await api.get_map(map_name, mode, course, bonus)
         return api, api_map
 
-async def _handle_error(ctx: Context, exc: Exception) -> None:
+async def _handle_error(ctx: _ContextT, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
 
     SteamError and APIError will still get raised.
@@ -179,10 +182,10 @@ async def _handle_error(ctx: Context, exc: Exception) -> None:
 
 @slash_command('register', 'Register account',
                autodefer=AutodeferMode.EPHEMERAL)
-async def _slash_register(ctx: Context,
+async def _slash_register(ctx: _ContextT,
                           profile: Option[str,
                                           StrParams('Steam profile URL')],
-                          mode_name: Option[str | None, _ModeParams]=Mode.KZT
+                          mode_name: Option[str, _ModeParams]=Mode.KZT
                           ) -> None:
     """Register the user with a given Steam profile and game mode"""
     steam = get_steam()
@@ -192,22 +195,22 @@ async def _slash_register(ctx: Context,
         await ctx.respond('Invalid Steam profile URL',
                           flags=MessageFlag.EPHEMERAL)
     else:
-        defaults: dict[str, Any] = {'steamid64': steamid64}
-        defaults['mode'] = mode_name
+        defaults: dict[str, int | Mode] = {'steamid64': steamid64}
+        defaults['mode'] = Mode(mode_name)
         await Player.update_or_create(user_id=ctx.user.id,
                                       server_id=ctx.guild_id,
                                       defaults=defaults)
         await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('unregister', 'Delete account settings')
-async def _slash_unregister(ctx: Context) -> None:
+async def _slash_unregister(ctx: _ContextT) -> None:
     """Unregister the user"""
     player = await _get_player(ctx)
     await player.delete()
     await ctx.respond('Unregistered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('mode', 'Show or set default game mode')
-async def _slash_mode(ctx: Context,
+async def _slash_mode(ctx: _ContextT,
                       mode_name: Option[str | None, _ModeParams]=None
                       ) -> None:
     """Set the user's default game mode"""
@@ -222,7 +225,7 @@ async def _slash_mode(ctx: Context,
                       flags=MessageFlag.EPHEMERAL)
 
 @slash_command('pb', 'Show personal best times', autodefer=True)
-async def _slash_pb(ctx: Context,
+async def _slash_pb(ctx: _ContextT,
                     map_name: Option[str, _MapParams],
                     type_name: Option[str, _TypeParams]=Type.ANY,
                     mode_name: Option[str | None, _ModeParams]=None,
@@ -242,7 +245,7 @@ async def _slash_pb(ctx: Context,
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
-async def _slash_latest(ctx: Context,
+async def _slash_latest(ctx: _ContextT,
                         type_name: Option[str, _TypeParams]=Type.ANY,
                         mode_name: Option[str | None, _ModeParams]=None,
                         player_member: Option[Member | None,
@@ -261,7 +264,7 @@ async def _slash_latest(ctx: Context,
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
-async def _slash_map(ctx: Context,
+async def _slash_map(ctx: _ContextT,
                      map_name: Option[str, _MapParams],
                      mode_name: Option[str | None, _ModeParams]=None,
                      course: Option[str | None, _CourseParams]=None,
@@ -284,7 +287,7 @@ async def _slash_map(ctx: Context,
 
 @slash_command('profile', 'Show rank, point total, and point average',
                autodefer=True)
-async def _slash_profile(ctx: Context,
+async def _slash_profile(ctx: _ContextT,
                          mode_name: Option[str | None, _ModeParams]=None,
                          player_member: Option[Member | None,
                                                _PlayerParams]=None
