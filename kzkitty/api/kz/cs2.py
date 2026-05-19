@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import override
 from urllib.parse import quote, urlencode
 
@@ -102,7 +102,7 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
         steamid64 = _steamid_to_steamid64(record.player.id)
     except ValueError as e:
         raise APIError('Malformed global API Steam ID') from e
-    player_url = _profile_url(steamid64) 
+    player_url = _profile_url(steamid64)
     if record.teleports == 0:
         points = record.pro_points
         place = record.pro_rank
@@ -111,8 +111,7 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
         place = record.nub_rank
     if not isinstance(points, float) or not isinstance(place, int):
         raise APIError('Malformed global API PB')
-    submitted_at = datetime.fromtimestamp(record.id.time / 1000.0,
-                                          tz=timezone.utc)
+    submitted_at = datetime.fromtimestamp(record.id.time / 1000.0, tz=UTC)
     return PersonalBest(id=record.id.int, steamid64=steamid64,
                         player_name=record.player.name, player_url=player_url,
                         map=api_map, time=record.time,
@@ -159,7 +158,7 @@ class CS2API(API):
                         await db_map.delete()
                         deleted += 1
                     continue
-                
+
                 is_new = False
                 is_updated = False
                 try:
@@ -196,7 +195,8 @@ class CS2API(API):
 
                 if api_map.courses != db_api_courses:
                     if not is_new:
-                        _logger.info('Updating courses for map %s', api_map.name)
+                        _logger.info('Updating courses for map %s',
+                                     api_map.name)
                     await Course.filter(map_id=api_map.id).delete()
                     for course_id, course in enumerate(api_map.courses,
                                                        start=1):

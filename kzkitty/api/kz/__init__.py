@@ -10,7 +10,7 @@ from kzkitty.models import Mode
 
 __all__ = ['API', 'APIConnectionError', 'APIError', 'APIMap',
            'APIMapAmbiguousError', 'APIMapError', 'APIMapNotFoundError',
-           'Rank', 'PersonalBest', 'Profile', 'api_for_mode']
+           'PersonalBest', 'Profile', 'Rank', 'api_for_mode']
 
 _csgo_api: CSGOAPI | None = None
 _cs2_api: CS2API | None = None
@@ -42,7 +42,6 @@ def api_for_mode(mode: Mode) -> API:
         return _cs2_api
 
 async def refresh_map_db() -> None:
-    global _csgo_api, _cs2_api
     if _csgo_api is None or _cs2_api is None:
         raise APIUnitializedError
 
