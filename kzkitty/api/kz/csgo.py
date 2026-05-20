@@ -47,7 +47,8 @@ class _APIPlayerRank(BaseModel):
     points: int
     average: float
 
-_APIMapResult = TypeAdapter(_APIMap | None)
+_APIMapResult = ( # pyright: ignore[reportUnknownVariableType]
+                 TypeAdapter(_APIMap | None))
 _APIMapList = TypeAdapter(list[_APIMap])
 _VNLMapList = TypeAdapter(list[_VNLMap])
 _APIRecordList = TypeAdapter(list[_APIRecord])
