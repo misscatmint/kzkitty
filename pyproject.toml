@@ -24,7 +24,7 @@ line-length = 80
 [tool.ruff.lint]
 select = ["A", "ANN", "ARG", "BLE", "C4", "DTZ", "E", "ERA", "F", "FIX",
           "FURB", "ISC", "INP", "G", "PERF", "PIE", "RSE", "RUF", "S", "SIM",
-          "SLF", "T20", "TID", "UP", "W"]
+          "SLF", "T20", "TC", "TID", "UP", "W"]
 ignore = ["S314", "UP031"]
 
 [tool.uv.sources.hikari]
