@@ -24,10 +24,10 @@ from kzkitty.models import (Map, Mode, Player, Type, close_db,
 
 _logger = logging.getLogger('kzkitty.bot')
 
-_ClientT = Client[Any]
-_ContextT = Context[Any]
+_ClientT = Client[Any] # pyright: ignore[reportExplicitAny]
+_ContextT = Context[Any] # pyright: ignore[reportExplicitAny]
 
-_tasks: set[asyncio.Task[Any]] = set()
+_tasks: set[asyncio.Task[Any]] = set() # pyright: ignore[reportExplicitAny]
 
 def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
