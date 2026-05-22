@@ -110,8 +110,8 @@ class CSGOAPI(API):
             if r.status_code == 404:
                 return 10, 10
             elif r.status_code != 200:
-                raise APIError("Couldn't get VNL map tiers (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get VNL map tiers "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get VNL map tiers (bad encoding)")
@@ -128,8 +128,8 @@ class CSGOAPI(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get VNL API maps (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get VNL API maps "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get VNL API maps (bad encoding)")
@@ -147,8 +147,8 @@ class CSGOAPI(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API maps (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API maps "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API maps (bad encoding)")
@@ -249,8 +249,8 @@ class CSGOAPI(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API PBs (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API PBs "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API PBs (bad encoding)")
@@ -280,8 +280,8 @@ class CSGOAPI(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API WR (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API WR "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API WR (bad encoding)")
@@ -298,8 +298,8 @@ class CSGOAPI(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API PB place (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API PB place "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API PB place "
@@ -339,8 +339,8 @@ class CSGOAPI(API):
             try:
                 r = await self._session.get(url, stream=True)
                 if r.status_code != 200:
-                    raise APIError("Couldn't get global API map (HTTP %d)" %
-                                   r.status_code)
+                    raise APIError("Couldn't get global API map "
+                                   f'(HTTP {r.status_code})')
                 json = await r.text
                 if json is None:
                     raise APIError("Couldn't get global API map "
@@ -465,8 +465,8 @@ class CSGOAPI(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API ranks (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API ranks "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API ranks (bad encoding)")

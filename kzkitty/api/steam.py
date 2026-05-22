@@ -30,8 +30,8 @@ class Steam:
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise SteamError("Couldn't get Steam profile (HTTP %d)"
-                                 % r.status_code)
+                raise SteamError("Couldn't get Steam profile "
+                                 f'(HTTP {r.status_code})')
             elif r.oheaders.content_type != 'text/xml':
                 raise SteamError("Couldn't get Steam profile (not text/xml)")
             text = await r.text

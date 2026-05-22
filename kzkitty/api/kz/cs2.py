@@ -134,8 +134,8 @@ class CS2API(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API maps (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API maps "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API Maps (bad encoding)")
@@ -249,8 +249,8 @@ class CS2API(API):
         try:
             r = await self._session.get(url, stream=True)
             if r.status_code != 200:
-                raise APIError("Couldn't get global API PBs (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API PBs "
+                               f'(HTTP {r.status_code})')
             json = await r.text
             if json is None:
                 raise APIError("Couldn't get global API PBs (bad encoding)")
@@ -309,8 +309,8 @@ class CS2API(API):
                 if r.status_code == 404:
                     raise APIMapNotFoundError('Map not found')
                 elif r.status_code != 200:
-                    raise APIError("Couldn't get global API map (HTTP %d)" %
-                                   r.status_code)
+                    raise APIError("Couldn't get global API map "
+                                   f'(HTTP {r.status_code})')
                 json = await r.text
                 if json is None:
                     raise APIError("Couldn't get global API map "
@@ -413,8 +413,8 @@ class CS2API(API):
                                mode=mode, rank=Rank.UNKNOWN,
                                points=0, average=None)
             else:
-                raise APIError("Couldn't get global API profile (HTTP %d)" %
-                               r.status_code)
+                raise APIError("Couldn't get global API profile "
+                               f'(HTTP {r.status_code})')
         except RequestException as e:
             raise APIConnectionError("Couldn't get global API PBs") from e
 
