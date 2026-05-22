@@ -37,17 +37,17 @@ def _formattime(td: timedelta) -> str:
     mm, ss = divmod(td.seconds, 60)
     hh, mm = divmod(mm, 60)
     if hh:
-        s = '%d:%02d:%02d' % (hh, mm, ss)
+        s = f'{hh:d}:{mm:02d}:{ss:02d}'
     elif mm:
-        s = '%d:%02d' % (mm, ss)
+        s = f'{mm:d}:{ss:02d}'
     else:
-        s = '%d' % ss
+        s = f'{ss:d}'
     if td.days:
-        def plural(n: int) -> tuple[int, str]:
-            return n, 's' if abs(n) != 1 else ''
-        s = ('%d day%s, ' % plural(td.days)) + s
+        def plural(n: int) -> str:
+            return 's' if abs(n) != 1 else ''
+        s = f'{td.days:d} day{plural(td.days)}, {s}'
     if td.microseconds:
-        s = s + '.%06d' % round(td.microseconds, -3)
+        s = f'{s}.{round(td.microseconds, -3):06d}'
         s = s.rstrip('0').rstrip('.')
     return s
 
