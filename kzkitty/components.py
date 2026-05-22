@@ -45,7 +45,11 @@ def _formattime(td: timedelta) -> str:
     if td.days:
         def plural(n: int) -> str:
             return 's' if abs(n) != 1 else ''
-        s = f'{td.days:d} day{plural(td.days)}, {s}'
+        days = f'{td.days:d} day{plural(td.days)}'
+        if not hh and not mm:
+            s = f'{days}, {s} second{plural(ss)}' if ss else days
+        else:
+            s = f'{days}, {s}'
     if td.microseconds:
         s = f'{s}.{round(td.microseconds, -3):06d}'
         s = s.rstrip('0').rstrip('.')
