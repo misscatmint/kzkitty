@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
-from niquests import AsyncSession, RequestException
+from urllib3 import AsyncPoolManager
+from urllib3.exceptions import HTTPError
 
 class SteamError(Exception):
     pass
@@ -20,27 +21,26 @@ class SteamProfile:
 
 class Steam:
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncSession = AsyncSession(timeout=timeout)
+        self._session: AsyncPoolManager = AsyncPoolManager(timeout=timeout)
 
     async def close(self) -> None:
-        await self._session.close()
+        await self._session.clear()
 
     async def _get_profile(self, url: str) -> ElementTree.Element:
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise SteamError("Couldn't get Steam profile "
-                                 f'(HTTP {r.status_code})')
-            elif r.oheaders.content_type != 'text/xml':
+                                 f'(HTTP {r.status})')
+            elif (r.headers.get('Content-Type', '').split(';', 1)[0] !=
+                  'text/xml'):
                 raise SteamError("Couldn't get Steam profile (not text/xml)")
-            text = await r.text
-            if text is None:
-                raise SteamError("Couldn't get Steam profile (bad encoding)")
-        except RequestException as e:
+            data = await r.data
+        except HTTPError as e:
             raise SteamError("Couldn't get Steam profile") from e
 
         try:
-            return ElementTree.fromstring(text)
+            return ElementTree.fromstring(data)
         except ElementTree.ParseError as e:
             raise SteamError("Couldn't parse Steam profile XML") from e
 

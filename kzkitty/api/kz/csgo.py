@@ -4,10 +4,11 @@ from datetime import datetime, timedelta, UTC
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
-from niquests import AsyncSession, RequestException
 from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
+from urllib3 import AsyncPoolManager
+from urllib3.exceptions import HTTPError
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
@@ -96,25 +97,23 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
 class CSGOAPI(API):
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncSession = AsyncSession(timeout=timeout)
+        self._session: AsyncPoolManager = AsyncPoolManager(timeout=timeout)
 
     @override
     async def close(self) -> None:
-        await self._session.close()
+        await self._session.clear()
 
     async def _vnl_tiers_for_map(self, map_name: str) -> tuple[int, int]:
         url = f'https://vnlkz.com/api/maps/{quote(map_name)}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code == 404:
+            r = await self._session.request('GET', url)
+            if r.status == 404:
                 return 10, 10
-            elif r.status_code != 200:
+            elif r.status != 200:
                 raise APIError("Couldn't get VNL map tiers "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get VNL map tiers (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get VNL map tiers") from e
         try:
             vnl_map = _VNLMap.model_validate_json(json)
@@ -125,14 +124,12 @@ class CSGOAPI(API):
     async def _vnl_tiers(self) -> dict[int, tuple[int, int]]:
         url = 'https://vnlkz.com/api/maps'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get VNL API maps "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get VNL API maps (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIError("Couldn't get VNL API maps") from e
         try:
             vnl_maps = _VNLMapList.validate_json(json)
@@ -144,14 +141,12 @@ class CSGOAPI(API):
     async def refresh_map_db(self) -> RefreshMapDBResult:
         url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API maps "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API maps (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIError("Couldn't get global API maps") from e
 
         try:
@@ -246,14 +241,12 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API PBs "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API PBs (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get global API PBs") from e
 
         try:
@@ -277,14 +270,12 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API WR "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API WR (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get global API WR") from e
         try:
             records = _APIRecordList.validate_json(json)
@@ -295,15 +286,12 @@ class CSGOAPI(API):
     async def _place_for_pb(self, pb: PersonalBest) -> int:
         url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API PB place "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API PB place "
-                               "(bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get global API PB place") from e
         try:
             return _APIPlace.validate_json(json)
@@ -336,15 +324,12 @@ class CSGOAPI(API):
         else:
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
             try:
-                r = await self._session.get(url, stream=True)
-                if r.status_code != 200:
+                r = await self._session.request('GET', url)
+                if r.status != 200:
                     raise APIError("Couldn't get global API map "
-                                   f'(HTTP {r.status_code})')
-                json = await r.text
-                if json is None:
-                    raise APIError("Couldn't get global API map "
-                                   '(bad encoding)')
-            except RequestException as e:
+                                   f'(HTTP {r.status})')
+                json = await r.data
+            except HTTPError as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
             try:
@@ -462,14 +447,12 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/player_ranks?{query}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API ranks "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API ranks (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get global API ranks") from e
         try:
             api_ranks = _APIPlayerRankList.validate_json(json)
