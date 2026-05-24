@@ -4,10 +4,11 @@ from datetime import datetime, timedelta, UTC
 from typing import override
 from urllib.parse import quote, urlencode
 
-from niquests import AsyncSession, RequestException
 from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
+from urllib3 import AsyncPoolManager
+from urllib3.exceptions import HTTPError
 
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
@@ -121,24 +122,22 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
 class CS2API(API):
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncSession = AsyncSession(timeout=timeout)
+        self._session: AsyncPoolManager = AsyncPoolManager(timeout=timeout)
 
     @override
     async def close(self) -> None:
-        await self._session.close()
+        await self._session.clear()
 
     @override
     async def refresh_map_db(self) -> RefreshMapDBResult:
         url = 'https://api.cs2kz.org/maps'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API maps "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API Maps (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIError("Couldn't get global API maps") from e
 
         try:
@@ -246,14 +245,12 @@ class CS2API(API):
         query = urlencode(params)
         url = f'https://api.cs2kz.org/records?{query}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code != 200:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
                 raise APIError("Couldn't get global API PBs "
-                               f'(HTTP {r.status_code})')
-            json = await r.text
-            if json is None:
-                raise APIError("Couldn't get global API PBs (bad encoding)")
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get global API PBs") from e
 
         try:
@@ -304,17 +301,14 @@ class CS2API(API):
         if course_id is None:
             url = f'https://api.cs2kz.org/maps/{quote(name)}'
             try:
-                r = await self._session.get(url, stream=True)
-                if r.status_code == 404:
+                r = await self._session.request('GET', url)
+                if r.status == 404:
                     raise APIMapNotFoundError('Map not found')
-                elif r.status_code != 200:
+                elif r.status != 200:
                     raise APIError("Couldn't get global API map "
-                                   f'(HTTP {r.status_code})')
-                json = await r.text
-                if json is None:
-                    raise APIError("Couldn't get global API map "
-                                   '(bad encoding)')
-            except RequestException as e:
+                                   f'(HTTP {r.status})')
+                json = await r.data
+            except HTTPError as e:
                 raise APIConnectionError("Couldn't get global API map") from e
 
             try:
@@ -401,20 +395,17 @@ class CS2API(API):
         player_url = _profile_url(steamid64)
         url = f'https://api.cs2kz.org/players/{steamid64}'
         try:
-            r = await self._session.get(url, stream=True)
-            if r.status_code == 200:
-                json = await r.text
-                if json is None:
-                    raise APIError("Couldn't get global API profile "
-                                   '(bad encoding)')
-            elif r.status_code == 404:
+            r = await self._session.request('GET', url)
+            if r.status == 200:
+                json = await r.data
+            elif r.status == 404:
                 return Profile(name=None, url=player_url,
                                mode=mode, rank=Rank.UNKNOWN,
                                points=0, average=None)
             else:
                 raise APIError("Couldn't get global API profile "
-                               f'(HTTP {r.status_code})')
-        except RequestException as e:
+                               f'(HTTP {r.status})')
+        except HTTPError as e:
             raise APIConnectionError("Couldn't get global API PBs") from e
 
         try:
