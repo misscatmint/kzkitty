@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, UTC
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
-from pydantic import AfterValidator, BaseModel, TypeAdapter, ValidationError
+from pydantic import (AfterValidator, BaseModel, Field, TypeAdapter,
+                      ValidationError)
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
 from urllib3 import AsyncPoolManager
@@ -26,8 +27,8 @@ class _APIMap(BaseModel):
 
 class _VNLMap(BaseModel):
     id: int
-    tpTier: int
-    proTier: int
+    tp_tier: int = Field(alias='tpTier')
+    pro_tier: int = Field(alias='proTier')
 
 def _utc_datetime(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC)
@@ -119,7 +120,7 @@ class CSGOAPI(API):
             vnl_map = _VNLMap.model_validate_json(json)
         except ValidationError as e:
             raise APIError('Malformed VNL API map') from e
-        return vnl_map.tpTier, vnl_map.proTier
+        return vnl_map.tp_tier, vnl_map.pro_tier
 
     async def _vnl_tiers(self) -> dict[int, tuple[int, int]]:
         url = 'https://vnlkz.com/api/maps'
@@ -135,7 +136,7 @@ class CSGOAPI(API):
             vnl_maps = _VNLMapList.validate_json(json)
         except ValidationError as e:
             raise APIError('Malformed VNL API maps') from e
-        return {m.id: (m.tpTier, m.proTier) for m in vnl_maps}
+        return {m.id: (m.tp_tier, m.pro_tier) for m in vnl_maps}
 
     @override
     async def refresh_map_db(self) -> RefreshMapDBResult:
