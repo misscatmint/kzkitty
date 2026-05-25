@@ -349,8 +349,9 @@ class CS2API(API):
 
         return APIMap(name=name, mode=mode, bonus=None,
                       course=course_name, tier=tier, tier_name=tier_name,
-                      pro_tier=tier, pro_tier_name=pro_tier_name, max_tier=10,
-                      has_tp_wrs=False, url=url, thumbnail_url=thumbnail_url)
+                      pro_tier=pro_tier, pro_tier_name=pro_tier_name,
+                      max_tier=10, has_tp_wrs=False, url=url,
+                      thumbnail_url=thumbnail_url)
 
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
