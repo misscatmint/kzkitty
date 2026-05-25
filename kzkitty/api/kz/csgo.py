@@ -87,13 +87,14 @@ def _thumbnail_url(name: str) -> str:
     return ('https://raw.githubusercontent.com/KZGlobalTeam/map-images/'
             f'public/webp/medium/{quote(name)}.webp')
 
-def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
+def _record_to_pb(record: _APIRecord, api_map: APIMap, place: int | None=None
+                  ) -> PersonalBest:
     player_url = _profile_url(record.steamid64, api_map.mode)
     return PersonalBest(id=record.id, steamid64=record.steamid64,
                         player_name=record.player_name, player_url=player_url,
                         map=api_map, time=record.time,
                         teleports=record.teleports, points=record.points,
-                        point_scale=1000, place=None, date=record.created_on)
+                        point_scale=1000, place=place, date=record.created_on)
 
 class CSGOAPI(API):
     @override
@@ -435,7 +436,7 @@ class CSGOAPI(API):
         bonus = api_map.bonus or 0
         records = [await self._record_for_map(api_map, tp_type, bonus)
                    for tp_type in (Type.TP, Type.PRO)]
-        return [_record_to_pb(record, api_map)
+        return [_record_to_pb(record, api_map, place=1)
                 for record in records if record]
 
     @override
