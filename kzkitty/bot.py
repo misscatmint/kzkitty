@@ -144,17 +144,17 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
             _logger.exception('API connection failure during map lookup')
         api = api_for_mode(mode)
         api_map = await api.get_map(map_name, mode, course, bonus)
-        return api, api_map
-    else:
-        # If the player has their mode set to VNL and they do /map on
-        # a VNL-impossible map, show KZT/CKZ times if they didn't explicitly
-        # ask for VNL times.
-        if (bonus is None and mode_name is None and
-            mode in {Mode.VNL, Mode.VNL2} and api_map.tier == 10):
-            mode = Mode.KZT if mode == Mode.VNL else Mode.CKZ
-            api = api_for_mode(mode)
-            api_map = await api.get_map(map_name, mode, course, bonus)
-        return api, api_map
+
+    # If the player has their mode set to VNL and they do /map on
+    # a VNL-impossible map, show KZT/CKZ times if they didn't explicitly
+    # ask for VNL times.
+    if (bonus is None and mode_name is None and
+        mode in {Mode.VNL, Mode.VNL2} and api_map.tier == 10):
+        mode = Mode.KZT if mode == Mode.VNL else Mode.CKZ
+        api = api_for_mode(mode)
+        api_map = await api.get_map(map_name, mode, course, bonus)
+
+    return api, api_map
 
 async def _handle_error(ctx: _ContextT, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
