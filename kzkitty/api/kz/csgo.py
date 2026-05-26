@@ -351,7 +351,10 @@ class CSGOAPI(API):
 
         max_tier = 7
         if bonus:
-            tier = tier_name = pro_tier = pro_tier_name = None
+            # Knowing if a bonus is possible would require downloading the
+            # map's record filters from the API, but it doesn't have a way of
+            # easily getting the filters for every bonus.
+            tier = tier_name = pro_tier = pro_tier_name = impossible = None
         else:
             if mode == Mode.VNL:
                 max_tier = 10
@@ -364,6 +367,21 @@ class CSGOAPI(API):
                 else:
                     tier = vnl_tier
                     pro_tier = vnl_pro_tier
+                impossible = (tier == 10 and pro_tier == 10
+                              if tier is not None and pro_tier is not None
+                              else None)
+            else:
+                if name.startswith('vnl_'): # noqa: SIM114
+                    impossible = True
+                elif name.startswith('skz_') and mode != Mode.SKZ:
+                    impossible = True
+                elif mode == mode.SKZ:
+                    # Knowing if a map is generally SKZ-possible would require
+                    # downloading the map's SKZ record filters from the API
+                    # which we don't currently do.
+                    impossible = None
+                else:
+                    impossible = False
             tier_name = _tier_name(tier, mode)
             pro_tier_name = _tier_name(pro_tier, mode)
 
@@ -373,8 +391,8 @@ class CSGOAPI(API):
         return APIMap(name=name, mode=mode, bonus=bonus or None,
                       course=None, tier=tier, tier_name=tier_name,
                       pro_tier=pro_tier, pro_tier_name=pro_tier_name,
-                      max_tier=max_tier, has_tp_wrs=True, url=url,
-                      thumbnail_url=thumbnail_url)
+                      max_tier=max_tier, impossible=impossible,
+                      has_tp_wrs=True, url=url, thumbnail_url=thumbnail_url)
 
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
