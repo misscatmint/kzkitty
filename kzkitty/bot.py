@@ -22,8 +22,8 @@ from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.models import (Map, Mode, Player, Type, close_db,
                             import_default_players, init_db)
 
-_ClientT = Client[Any] # pyright: ignore[reportExplicitAny]
-_ContextT = Context[Any] # pyright: ignore[reportExplicitAny]
+type _ClientT = Client[Any] # pyright: ignore[reportExplicitAny]
+type _ContextT = Context[Any] # pyright: ignore[reportExplicitAny]
 
 _logger = logging.getLogger('kzkitty.bot')
 _tasks: set[asyncio.Task[Any]] = set() # pyright: ignore[reportExplicitAny]
