@@ -22,11 +22,10 @@ from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.models import (Map, Mode, Player, Type, close_db,
                             import_default_players, init_db)
 
-_logger = logging.getLogger('kzkitty.bot')
-
 _ClientT = Client[Any] # pyright: ignore[reportExplicitAny]
 _ContextT = Context[Any] # pyright: ignore[reportExplicitAny]
 
+_logger = logging.getLogger('kzkitty.bot')
 _tasks: set[asyncio.Task[Any]] = set() # pyright: ignore[reportExplicitAny]
 
 def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
@@ -154,8 +153,6 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     # therefore isn't possible in this case.
     if mode_name is None and api_map.impossible:
         old_mode = mode
-        old_api = api
-        old_api_map = api_map
         if api_map.name.startswith('vnl_'):
             mode = Mode.VNL
         elif api_map.name.startswith('skz_'):
@@ -167,6 +164,8 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                     Mode.CKZ: Mode.VNL2,
                     Mode.VNL2: Mode.CKZ}[mode]
         if mode != old_mode:
+            old_api = api
+            old_api_map = api_map
             api = api_for_mode(mode)
             api_map = await api.get_map(map_name, mode, course, bonus)
             if api_map.impossible:
