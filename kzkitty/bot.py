@@ -149,10 +149,9 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     # explicit mode isn't set), try to return the map in a more possible mode
     # so times can still be shown.
     #
-    # Note that on CSGO impossible is None for bonuses and when the mode is
-    # SKZ as that would require checking map record filters in the API which
-    # we don't currently do. Automatic fallback isn't possible in those
-    # cases.
+    # Note that on CSGO impossible is None for bonuses as we can't easily get
+    # map record filters for all bonuses from the API. Automatic fallback
+    # therefore isn't possible in this case.
     if mode_name is None and api_map.impossible:
         old_mode = mode
         if api_map.name.startswith('vnl_'):
