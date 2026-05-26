@@ -434,16 +434,15 @@ class CSGOAPI(API):
                 impossible = (tier == 10 and pro_tier == 10
                               if tier is not None and pro_tier is not None
                               else None)
+            elif name.startswith('vnl_'): # noqa: SIM114
+                impossible = True
+            elif name.startswith('skz_') and mode != Mode.SKZ:
+                impossible = True
+            elif mode == mode.SKZ:
+                impossible = (not skz_possible
+                              if skz_possible is not None else None)
             else:
-                if name.startswith('vnl_'): # noqa: SIM114
-                    impossible = True
-                elif name.startswith('skz_') and mode != Mode.SKZ:
-                    impossible = True
-                elif mode == mode.SKZ:
-                    impossible = (not skz_possible
-                                  if skz_possible is not None else None)
-                else:
-                    impossible = False
+                impossible = False
             tier_name = _tier_name(tier, mode)
             pro_tier_name = _tier_name(pro_tier, mode)
 
