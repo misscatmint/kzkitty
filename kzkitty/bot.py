@@ -145,14 +145,29 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
         api = api_for_mode(mode)
         api_map = await api.get_map(map_name, mode, course, bonus)
 
-    # If the player has their mode set to VNL and they do /map on
-    # a VNL-impossible map, show KZT/CKZ times if they didn't explicitly
-    # ask for VNL times.
-    if (bonus is None and mode_name is None and
-        mode in {Mode.VNL, Mode.VNL2} and api_map.tier == 10):
-        mode = Mode.KZT if mode == Mode.VNL else Mode.CKZ
-        api = api_for_mode(mode)
-        api_map = await api.get_map(map_name, mode, course, bonus)
+    # If a player asks for a map impossible for their default mode (and an
+    # explicit mode isn't set), try to return the map in a more possible mode
+    # so times can still be shown.
+    #
+    # Note that on CSGO impossible is None for bonuses and when the mode is
+    # SKZ as that would require checking map record filters in the API which
+    # we don't currently do. Automatic fallback isn't possible in those
+    # cases.
+    if mode_name is None and api_map.impossible:
+        old_mode = mode
+        if api_map.name.startswith('vnl_'):
+            mode = Mode.VNL
+        elif api_map.name.startswith('skz_'):
+            mode = Mode.SKZ
+        else:
+            mode = {Mode.KZT: Mode.KZT,
+                    Mode.SKZ: Mode.KZT,
+                    Mode.VNL: Mode.KZT,
+                    Mode.CKZ: Mode.VNL2,
+                    Mode.VNL2: Mode.CKZ}[mode]
+        if mode != old_mode:
+            api = api_for_mode(mode)
+            api_map = await api.get_map(map_name, mode, course, bonus)
 
     return api, api_map
 

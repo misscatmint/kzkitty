@@ -351,6 +351,7 @@ class CS2API(API):
                       course=course_name, tier=tier, tier_name=tier_name,
                       pro_tier=pro_tier, pro_tier_name=pro_tier_name,
                       max_tier=10, has_tp_wrs=False, url=url,
+                      impossible=tier == 10 and pro_tier == 10,
                       thumbnail_url=thumbnail_url)
 
     @override
