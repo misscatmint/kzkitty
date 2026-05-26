@@ -154,6 +154,8 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     # therefore isn't possible in this case.
     if mode_name is None and api_map.impossible:
         old_mode = mode
+        old_api = api
+        old_api_map = api_map
         if api_map.name.startswith('vnl_'):
             mode = Mode.VNL
         elif api_map.name.startswith('skz_'):
@@ -167,6 +169,11 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
         if mode != old_mode:
             api = api_for_mode(mode)
             api_map = await api.get_map(map_name, mode, course, bonus)
+            if api_map.impossible:
+                # This is unlikely to be possible, but if falling back
+                # produces another impossible map response, we return things
+                # in the original mode to avoid confusion around tiers, etc.
+                return old_api, old_api_map
 
     return api, api_map
 
