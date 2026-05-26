@@ -25,6 +25,14 @@ class _APIMap(BaseModel):
     difficulty: int
     validated: bool
 
+class _APIMapRecordFilter(BaseModel):
+    id: int
+    map_id: int
+    stage: int
+    mode_id: int
+    tickrate: int
+    has_teleports: bool
+
 class _VNLMap(BaseModel):
     id: int
     tp_tier: int = Field(alias='tpTier')
@@ -53,6 +61,7 @@ _APIMapResult = ( # pyright: ignore[reportUnknownVariableType]
                  TypeAdapter(_APIMap | None))
 _APIMapList = TypeAdapter(list[_APIMap])
 _VNLMapList = TypeAdapter(list[_VNLMap])
+_APIMapRecordFilterList = TypeAdapter(list[_APIMapRecordFilter])
 _APIRecordList = TypeAdapter(list[_APIRecord])
 _APIPlayerRankList = TypeAdapter(list[_APIPlayerRank])
 _APIPlace = TypeAdapter(int)
@@ -105,6 +114,25 @@ class CSGOAPI(API):
     async def close(self) -> None:
         await self._session.clear()
 
+    async def _skz_filters(self, api_maps: list[_APIMap]) -> dict[int, bool]:
+        url = ('https://kztimerglobal.com/api/v2.0/record_filters?'
+               'mode_ids=201&stages=0&tickrates=128&has_teleports=false&'
+               'limit=9999')
+        try:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
+                raise APIError("Couldn't get global API SKZ record filters "
+                               f'(HTTP {r.status})')
+            json = await r.data
+        except HTTPError as e:
+            raise APIError("Couldn't get global API SKZ record filters") from e
+        try:
+            filters = _APIMapRecordFilterList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed global API map record filters') from e
+        skz_maps = {f.map_id for f in filters}
+        return {m.id: m.id in skz_maps for m in api_maps}
+
     async def _vnl_tiers_for_map(self, map_name: str) -> tuple[int, int]:
         url = f'https://vnlkz.com/api/maps/{quote(map_name)}'
         try:
@@ -156,12 +184,17 @@ class CSGOAPI(API):
         except ValidationError as e:
             raise APIError('Malformed global API maps') from e
 
+        skz_filters: dict[int, bool] = {}
         try:
-            vnl_tiers: dict[int, tuple[int, int]] | None = (
-                    await self._vnl_tiers())
+            skz_filters = await self._skz_filters(api_maps)
+        except APIError:
+            _logger.exception("Couldn't get SKZ map record filters")
+
+        vnl_tiers: dict[int, tuple[int, int]] | None = None
+        try:
+            vnl_tiers = await self._vnl_tiers()
         except APIError:
             _logger.exception("Couldn't get VNL map tiers")
-            vnl_tiers = None
 
         new = updated = deleted = 0
         for api_map in api_maps:
@@ -189,7 +222,8 @@ class CSGOAPI(API):
                     await Map(map_id=api_map.id, is_cs2=False,
                               name=api_map.name, tier=api_map.difficulty,
                               pro_tier=api_map.difficulty, vnl_tier=vnl_tier,
-                              vnl_pro_tier=vnl_pro_tier).save()
+                              vnl_pro_tier=vnl_pro_tier,
+                              skz_possible=skz_filters.get(api_map.id)).save()
                     new += 1
                 else:
                     changed = False
@@ -211,6 +245,12 @@ class CSGOAPI(API):
                         _logger.info('Updating VNL pro tier for map %s',
                                      api_map.name)
                         db_map.vnl_pro_tier = vnl_pro_tier
+                        changed = True
+                    skz_possible = skz_filters.get(api_map.id)
+                    if db_map.skz_possible != skz_possible:
+                        _logger.info('Updating SKZ possible status for map %s',
+                                     api_map.name)
+                        db_map.skz_possible = skz_possible
                         changed = True
                     if changed:
                         await db_map.save()
@@ -323,6 +363,7 @@ class CSGOAPI(API):
             pro_tier = db_map.pro_tier
             vnl_tier = db_map.vnl_tier
             vnl_pro_tier = db_map.vnl_pro_tier
+            skz_possible = db_map.skz_possible
         else:
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
             try:
@@ -343,6 +384,28 @@ class CSGOAPI(API):
             name = api_map.name
             tier = pro_tier = api_map.difficulty
             vnl_tier = vnl_pro_tier = None
+
+            url = ('https://kztimerglobal.com/api/v2.0/record_filters?'
+                   f'map_ids={api_map.id}&mode_ids=201&stages=0&tickrates=128'
+                   '&has_teleports=false&limit=1')
+            try:
+                r = await self._session.request('GET', url)
+                if r.status != 200:
+                    _logger.error("Couldn't get global API SKZ record filter "
+                                  '(HTTP %s)', r.status)
+                    skz_possible = None
+                json = await r.data
+            except HTTPError:
+                _logger.exception("Couldn't get global API SKZ record filter")
+                skz_possible = None
+            else:
+                try:
+                    filters = _APIMapRecordFilterList.validate_json(json)
+                except ValidationError:
+                    _logger.exception('Malformed global API map record filter')
+                    skz_possible = None
+                else:
+                    skz_possible = bool(filters)
 
         if course is not None:
             raise APIMapError("Courses aren't supported on CS:GO. "
@@ -376,10 +439,8 @@ class CSGOAPI(API):
                 elif name.startswith('skz_') and mode != Mode.SKZ:
                     impossible = True
                 elif mode == mode.SKZ:
-                    # Knowing if a map is generally SKZ-possible would require
-                    # downloading the map's SKZ record filters from the API
-                    # which we don't currently do.
-                    impossible = None
+                    impossible = (not skz_possible
+                                  if skz_possible is not None else None)
                 else:
                     impossible = False
             tier_name = _tier_name(tier, mode)

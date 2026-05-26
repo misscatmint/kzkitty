@@ -28,6 +28,7 @@ class Map(Model):
     pro_tier = fields.IntField(null=True)
     vnl_tier = fields.IntField(null=True)
     vnl_pro_tier = fields.IntField(null=True)
+    skz_possible = fields.BooleanField(null=True)
 
 class Course(Model):
     name = fields.CharField(max_length=255)
