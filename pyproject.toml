@@ -14,9 +14,16 @@ dependencies = [
 ]
 
 [tool.basedpyright]
-typeCheckingMode = "standard"
+pythonVersion = "3.13"
 reportImplicitStringConcatenation = false
 reportUnusedCallResult = false
+typeCheckingMode = "standard"
+
+[tool.mypy]
+native_parser = true
+python_executable = ".venv/bin/python"
+python_version = "3.13"
+strict = true
 
 [tool.ruff]
 line-length = 80
@@ -26,6 +33,10 @@ select = ["A", "ANN", "ARG", "BLE", "C4", "DTZ", "E", "ERA", "F", "FIX",
           "FURB", "ISC", "INP", "G", "PERF", "PIE", "RSE", "RUF", "S", "SIM",
           "SLF", "T20", "TC", "TID", "UP", "W"]
 ignore = ["S314"]
+
+[tool.pyrefly]
+preset = "strict"
+python-version = "3.13"
 
 [tool.uv.sources.hikari]
 git = "https://github.com/hikari-py/hikari.git"

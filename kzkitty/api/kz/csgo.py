@@ -210,6 +210,8 @@ class CSGOAPI(API):
                         deleted += 1
                     continue
 
+                vnl_tier: int | None
+                vnl_pro_tier: int | None
                 if vnl_tiers is not None:
                     vnl_tier, vnl_pro_tier = vnl_tiers.get(api_map.id,
                                                            (10, 10))
@@ -481,6 +483,8 @@ class CSGOAPI(API):
     @override
     async def get_latest(self, steamid64: int, mode: Mode,
                          tp_type: Type=Type.ANY) -> PersonalBest | None:
+        records: list[_APIRecord]
+        pros: list[_APIRecord]
         if tp_type in {Type.TP, Type.ANY}:
             records = await self._records_for_steamid64(steamid64, mode,
                                                         stage=0,
