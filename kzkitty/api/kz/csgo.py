@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import datetime, timedelta, UTC
-from typing import Annotated, cast, override
+from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
 
 from pydantic import (AfterValidator, BaseModel, Field, TypeAdapter,
@@ -57,8 +57,7 @@ class _APIPlayerRank(BaseModel):
     points: int
     average: float
 
-_APIMapResult = ( # pyright: ignore[reportUnknownVariableType]
-                 TypeAdapter(_APIMap | None))
+_APIMapResult: TypeAdapter[_APIMap | None] = TypeAdapter(_APIMap | None)
 _APIMapList = TypeAdapter(list[_APIMap])
 _VNLMapList = TypeAdapter(list[_VNLMap])
 _APIMapRecordFilterList = TypeAdapter(list[_APIMapRecordFilter])
@@ -378,8 +377,7 @@ class CSGOAPI(API):
                 raise APIConnectionError("Couldn't get global API map") from e
 
             try:
-                api_map = cast('_APIMap | None',
-                               _APIMapResult.validate_json(json))
+                api_map = _APIMapResult.validate_json(json)
             except ValidationError as e:
                 raise APIError('Malformed global API map') from e
             if api_map is None:
