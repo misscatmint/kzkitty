@@ -93,16 +93,22 @@ async def _autocomplete_map(data: AutocompleteData[_ClientT, str]) -> list[str]:
                      .values('name'))
     return [m['name'] for m in maps]
 
-_MapParams = StrParams('Map name', name='map',
-                       autocomplete_with=_autocomplete_map)
-_ModeParams = StrParams('Game mode', name='mode',
-                        choices=[Mode.KZT, Mode.SKZ, Mode.VNL, Mode.CKZ,
-                                 Mode.VNL2])
-_PlayerParams = MemberParams('Player', name='player')
-_TypeParams = StrParams('Pro or teleport run', name='type',
-                        choices=[Type.PRO, Type.TP, Type.ANY])
-_CourseParams = StrParams('Course')
-_BonusParams = IntParams('Bonus', min=1)
+_SteamProfileURLOption = Annotated[str, StrParams('Steam profile URL')]
+_MapOption = Annotated[str, StrParams('Map name', name='map',
+                                      autocomplete_with=_autocomplete_map)]
+_ModeOption = Annotated[str, StrParams('Game mode', name='mode',
+                                       choices=[Mode.KZT, Mode.SKZ, Mode.VNL,
+                                                Mode.CKZ, Mode.VNL2])]
+_MaybeModeOption = Annotated[str | None, StrParams('Game mode', name='mode',
+                                                   choices=[Mode.KZT, Mode.SKZ,
+                                                            Mode.VNL, Mode.CKZ,
+                                                            Mode.VNL2])]
+_MaybePlayerOption = Annotated[Member | None, MemberParams('Player',
+                                                           name='player')]
+_TypeOption = Annotated[str, StrParams('Pro or teleport run', name='type',
+                                       choices=[Type.PRO, Type.TP, Type.ANY])]
+_MaybeCourseOption = Annotated[str | None, StrParams('Course')]
+_MaybeBonusOption = Annotated[int | None, IntParams('Bonus', min=1)]
 
 class _PlayerNotFound(Exception):
     pass
@@ -206,11 +212,8 @@ async def _handle_error(ctx: _ContextT, exc: Exception) -> None:
 
 @slash_command('register', 'Register account',
                autodefer=AutodeferMode.EPHEMERAL)
-async def _slash_register(ctx: _ContextT,
-                          profile: Annotated[str,
-                                             StrParams('Steam profile URL')],
-                          mode_name: Annotated[str, _ModeParams]=Mode.KZT
-                          ) -> None:
+async def _slash_register(ctx: _ContextT, profile: _SteamProfileURLOption,
+                          mode_name: _ModeOption=Mode.KZT) -> None:
     """Register the user with a given Steam profile and game mode"""
     steam = get_steam()
     try:
@@ -234,9 +237,7 @@ async def _slash_unregister(ctx: _ContextT) -> None:
     await ctx.respond('Unregistered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('mode', 'Show or set default game mode')
-async def _slash_mode(ctx: _ContextT,
-                      mode_name: Annotated[str | None, _ModeParams]=None
-                      ) -> None:
+async def _slash_mode(ctx: _ContextT, mode_name: _MaybeModeOption=None) -> None:
     """Set the user's default game mode"""
     player = await _get_player(ctx)
     if mode_name is None:
@@ -249,14 +250,12 @@ async def _slash_mode(ctx: _ContextT,
                       flags=MessageFlag.EPHEMERAL)
 
 @slash_command('pb', 'Show personal best times', autodefer=True)
-async def _slash_pb(ctx: _ContextT,
-                    map_name: Annotated[str, _MapParams],
-                    type_name: Annotated[str, _TypeParams]=Type.ANY,
-                    mode_name: Annotated[str | None, _ModeParams]=None,
-                    course: Annotated[str | None, _CourseParams]=None,
-                    bonus: Annotated[int | None, _BonusParams]=None,
-                    player_member: Annotated[Member | None, _PlayerParams]=None
-                    ) -> None:
+async def _slash_pb(ctx: _ContextT, map_name: _MapOption,
+                    type_name: _TypeOption=Type.ANY,
+                    mode_name: _MaybeModeOption=None,
+                    course: _MaybeCourseOption=None,
+                    bonus: _MaybeBonusOption=None,
+                    player_member: _MaybePlayerOption=None) -> None:
     """Look up a personal best time"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
@@ -269,12 +268,9 @@ async def _slash_pb(ctx: _ContextT,
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
-async def _slash_latest(ctx: _ContextT,
-                        type_name: Annotated[str, _TypeParams]=Type.ANY,
-                        mode_name: Annotated[str | None, _ModeParams]=None,
-                        player_member: Annotated[Member | None,
-                                                 _PlayerParams]=None
-                        ) -> None:
+async def _slash_latest(ctx: _ContextT, type_name: _TypeOption=Type.ANY,
+                        mode_name: _MaybeModeOption=None,
+                        player_member: _MaybePlayerOption=None) -> None:
     """Look up the user's latest personal best for a given game mode"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
@@ -288,11 +284,10 @@ async def _slash_latest(ctx: _ContextT,
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
-async def _slash_map(ctx: _ContextT,
-                     map_name: Annotated[str, _MapParams],
-                     mode_name: Annotated[str | None, _ModeParams]=None,
-                     course: Annotated[str | None, _CourseParams]=None,
-                     bonus: Annotated[int | None, _BonusParams]=None) -> None:
+async def _slash_map(ctx: _ContextT, map_name: _MapOption,
+                     mode_name: _MaybeModeOption=None,
+                     course: _MaybeCourseOption=None,
+                     bonus: _MaybeBonusOption=None) -> None:
     """Look up map info"""
     if mode_name is not None:
         mode = Mode(mode_name)
@@ -311,11 +306,8 @@ async def _slash_map(ctx: _ContextT,
 
 @slash_command('profile', 'Show rank, point total, and point average',
                autodefer=True)
-async def _slash_profile(ctx: _ContextT,
-                         mode_name: Annotated[str | None, _ModeParams]=None,
-                         player_member: Annotated[Member | None,
-                                                  _PlayerParams]=None
-                         ) -> None:
+async def _slash_profile(ctx: _ContextT, mode_name: _MaybeModeOption=None,
+                         player_member: _MaybePlayerOption=None) -> None:
     """Look up the user's profile information"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
