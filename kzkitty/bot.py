@@ -26,7 +26,7 @@ type _ClientT = Client[Any] # pyright: ignore[reportExplicitAny]
 type _ContextT = Context[Any] # pyright: ignore[reportExplicitAny]
 
 _logger = logging.getLogger('kzkitty.bot')
-_tasks: set[asyncio.Task[Any]] = set() # pyright: ignore[reportExplicitAny]
+_tasks: set[asyncio.Task[None]] = set()
 
 def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
