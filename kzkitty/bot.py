@@ -22,13 +22,13 @@ from kzkitty.components import map_component, pb_component, profile_component
 from kzkitty.models import (Map, Mode, Player, Type, close_db,
                             import_default_players, init_db)
 
-type _ClientT = Client[Any] # pyright: ignore[reportExplicitAny]
-type _ContextT = Context[Any] # pyright: ignore[reportExplicitAny]
+type _Client = Client[Any] # pyright: ignore[reportExplicitAny]
+type _Context = Context[Any] # pyright: ignore[reportExplicitAny]
 
 _logger = logging.getLogger('kzkitty.bot')
 _tasks: set[asyncio.Task[None]] = set()
 
-def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
+def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
@@ -44,7 +44,7 @@ def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
     refresh_db_loop = IntervalLoop(refresh_map_db,
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
-    async def startup(_: _ClientT) -> None:
+    async def startup(_: _Client) -> None:
         await init_api(timeout=api_timeout)
         await init_steam(timeout=steam_timeout)
         await init_db(db_url)
@@ -54,7 +54,7 @@ def _setup(client: _ClientT, db_url: str, refresh_db_hours: int,
         refresh_db_loop.start()
     client.add_startup_hook(startup)
 
-    async def shutdown(_: _ClientT) -> None:
+    async def shutdown(_: _Client) -> None:
         await close_api()
         await close_steam()
         await close_db()
@@ -79,7 +79,7 @@ def runrest(host: str, port: int, discord_token: str, db_url: str,
     _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout)
     bot.run(host=host, port=port, check_for_updates=False)
 
-async def _autocomplete_map(data: AutocompleteData[_ClientT, str]) -> list[str]:
+async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
     """Autocomplete map names for slash commands"""
     if not data.focused_value:
         return []
@@ -113,7 +113,7 @@ _MaybeBonusOption = Annotated[int | None, IntParams('Bonus', min=1)]
 class _PlayerNotFound(Exception):
     pass
 
-async def _get_player(ctx: _ContextT, player_member: Member | None=None
+async def _get_player(ctx: _Context, player_member: Member | None=None
                       ) -> Player:
     """Look up a registered player.
 
@@ -182,7 +182,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
 
     return api, api_map
 
-async def _handle_error(ctx: _ContextT, exc: Exception) -> None:
+async def _handle_error(ctx: _Context, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
 
     SteamError and APIError will still get raised.
@@ -212,7 +212,7 @@ async def _handle_error(ctx: _ContextT, exc: Exception) -> None:
 
 @slash_command('register', 'Register account',
                autodefer=AutodeferMode.EPHEMERAL)
-async def _slash_register(ctx: _ContextT, profile: _SteamProfileURLOption,
+async def _slash_register(ctx: _Context, profile: _SteamProfileURLOption,
                           mode_name: _ModeOption=Mode.KZT) -> None:
     """Register the user with a given Steam profile and game mode"""
     steam = get_steam()
@@ -230,14 +230,14 @@ async def _slash_register(ctx: _ContextT, profile: _SteamProfileURLOption,
         await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('unregister', 'Delete account settings')
-async def _slash_unregister(ctx: _ContextT) -> None:
+async def _slash_unregister(ctx: _Context) -> None:
     """Unregister the user"""
     player = await _get_player(ctx)
     await player.delete()
     await ctx.respond('Unregistered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('mode', 'Show or set default game mode')
-async def _slash_mode(ctx: _ContextT, mode_name: _MaybeModeOption=None) -> None:
+async def _slash_mode(ctx: _Context, mode_name: _MaybeModeOption=None) -> None:
     """Set the user's default game mode"""
     player = await _get_player(ctx)
     if mode_name is None:
@@ -250,7 +250,7 @@ async def _slash_mode(ctx: _ContextT, mode_name: _MaybeModeOption=None) -> None:
                       flags=MessageFlag.EPHEMERAL)
 
 @slash_command('pb', 'Show personal best times', autodefer=True)
-async def _slash_pb(ctx: _ContextT, map_name: _MapOption,
+async def _slash_pb(ctx: _Context, map_name: _MapOption,
                     type_name: _TypeOption=Type.ANY,
                     mode_name: _MaybeModeOption=None,
                     course: _MaybeCourseOption=None,
@@ -268,7 +268,7 @@ async def _slash_pb(ctx: _ContextT, map_name: _MapOption,
     await ctx.respond(component=component)
 
 @slash_command('latest', 'Show most recent personal best', autodefer=True)
-async def _slash_latest(ctx: _ContextT, type_name: _TypeOption=Type.ANY,
+async def _slash_latest(ctx: _Context, type_name: _TypeOption=Type.ANY,
                         mode_name: _MaybeModeOption=None,
                         player_member: _MaybePlayerOption=None) -> None:
     """Look up the user's latest personal best for a given game mode"""
@@ -284,7 +284,7 @@ async def _slash_latest(ctx: _ContextT, type_name: _TypeOption=Type.ANY,
     await ctx.respond(component=component)
 
 @slash_command('map', 'Show map info and world record times', autodefer=True)
-async def _slash_map(ctx: _ContextT, map_name: _MapOption,
+async def _slash_map(ctx: _Context, map_name: _MapOption,
                      mode_name: _MaybeModeOption=None,
                      course: _MaybeCourseOption=None,
                      bonus: _MaybeBonusOption=None) -> None:
@@ -306,7 +306,7 @@ async def _slash_map(ctx: _ContextT, map_name: _MapOption,
 
 @slash_command('profile', 'Show rank, point total, and point average',
                autodefer=True)
-async def _slash_profile(ctx: _ContextT, mode_name: _MaybeModeOption=None,
+async def _slash_profile(ctx: _Context, mode_name: _MaybeModeOption=None,
                          player_member: _MaybePlayerOption=None) -> None:
     """Look up the user's profile information"""
     player = await _get_player(ctx, player_member)
