@@ -38,6 +38,13 @@ ignore = ["S314"]
 preset = "strict"
 python-version = "3.13"
 
+[tool.ty.rules]
+division-by-zero = "warn"
+possibly-missing-attribute = "warn"
+possibly-missing-import = "warn"
+possibly-unresolved-reference = "warn"
+unsupported-dynamic-base = "warn"
+
 [tool.uv.sources.hikari]
 git = "https://github.com/hikari-py/hikari.git"
 rev = "222aab1bcd54bba9292d0087271a289a0742a56b"
