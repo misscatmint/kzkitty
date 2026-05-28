@@ -205,6 +205,7 @@ class CSGOAPI(API):
                     except DoesNotExist:
                         pass
                     else:
+                        _logger.info('Deleting map %s', api_map.name)
                         await db_map.delete()
                         deleted += 1
                     continue
