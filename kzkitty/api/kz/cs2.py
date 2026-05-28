@@ -154,6 +154,8 @@ class CS2API(API):
                     except DoesNotExist:
                         pass
                     else:
+                        _logger.info('Deleting map %s', api_map.name)
+                        await Course.filter(map_id=api_map.id).delete()
                         await db_map.delete()
                         deleted += 1
                     continue
