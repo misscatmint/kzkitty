@@ -65,6 +65,13 @@ _APIRecordList = TypeAdapter(list[_APIRecord])
 _APIPlayerRankList = TypeAdapter(list[_APIPlayerRank])
 _APIPlace = TypeAdapter(int)
 
+class _GOKZTopRecord(BaseModel):
+    map_name: str
+    stage: int
+    teleports: int
+
+_GOKZTopRecordList = TypeAdapter(list[_GOKZTopRecord])
+
 def _tier_name(tier: int | None, mode: Mode) -> str:
     if mode == Mode.VNL:
         names = {1: 'Very Easy', 2: 'Easy', 3: 'Medium', 4: 'Advanced',
@@ -260,6 +267,38 @@ class CSGOAPI(API):
                         await db_map.save()
                         updated += 1
         return RefreshMapDBResult(new, updated, deleted)
+
+    async def _gokz_top_for_steamid64(self, steamid64: int, mode: Mode,
+                                      tp_type: Type=Type.ANY,
+                                      stage: int | None=None
+                                      ) -> _GOKZTopRecord | None:
+        api_mode = {Mode.KZT: 'KZT', Mode.SKZ: 'SKZ', Mode.VNL: 'VNL'}[mode]
+        params: dict[str, str] = {'identifier': str(steamid64),
+                                  'scope': api_mode,
+                                  'sort_by': 'created_at',
+                                  'sort_order': 'desc',
+                                  'limit': '1'}
+        if stage is not None:
+            params['stage'] = str(stage)
+        if tp_type == Type.TP:
+            params['type'] = 'NUB'
+        elif tp_type == Type.PRO:
+            params['type'] = 'PRO'
+        query = urlencode(params)
+        url = f'https://api.gokz.top/v1/records/pb?{query}'
+        try:
+            r = await self._session.request('GET', url)
+            if r.status != 200:
+                raise APIError(f"Couldn't get gokz.top PBs (HTTP {r.status})")
+            json = await r.data
+        except HTTPError as e:
+            raise APIConnectionError("Couldn't get gokz.top PBs") from e
+
+        try:
+            records = _GOKZTopRecordList.validate_json(json)
+        except ValidationError as e:
+            raise APIError('Malformed gokz.top PBs') from e
+        return records[0] if records else None
 
     async def _records_for_steamid64(self, steamid64: int, mode: Mode,
                                      tp_type: Type=Type.ANY,
@@ -484,6 +523,28 @@ class CSGOAPI(API):
     @override
     async def get_latest(self, steamid64: int, mode: Mode,
                          tp_type: Type=Type.ANY) -> PersonalBest | None:
+        # Attempt to get the latest PB from gokz.top before asking the global
+        # API directly. gokz.top is able to return times for recently released
+        # maps, whereas the global API has an issue that prevents them from
+        # showing up in certain areas of the API (like when asking for the
+        # latest runs for a user).
+        try:
+            gokz_top = await self._gokz_top_for_steamid64(steamid64, mode,
+                                                          stage=0,
+                                                          tp_type=tp_type)
+        except APIError:
+            _logger.exception("Couldn't get latest PB from gokz.top")
+        else:
+            if gokz_top is not None:
+                try:
+                    api_map = await self.get_map(gokz_top.map_name, mode,
+                                                 bonus=gokz_top.stage)
+                except APIMapError:
+                    _logger.exception("Invalid map name from gokz.top")
+                else:
+                    tp_type = Type.PRO if gokz_top.teleports == 0 else Type.TP
+                    return await self.get_pb(steamid64, api_map, tp_type)
+
         records: list[_APIRecord]
         pros: list[_APIRecord]
         if tp_type in {Type.TP, Type.ANY}:
