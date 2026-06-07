@@ -122,7 +122,9 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
 class CS2API(API):
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncPoolManager = AsyncPoolManager(timeout=timeout)
+        headers = {'User-Agent': 'kzkitty/0.1'}
+        self._session: AsyncPoolManager = AsyncPoolManager(headers=headers,
+                                                           timeout=timeout)
 
     @override
     async def close(self) -> None:
