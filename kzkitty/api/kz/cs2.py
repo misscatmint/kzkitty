@@ -43,6 +43,9 @@ class _APIPlayer(BaseModel):
     id: str
     name: str
 
+class _ShallowAPIServer(BaseModel):
+    name: str
+
 class _ShallowAPIMap(BaseModel):
     name: str
 
@@ -52,6 +55,7 @@ class _ShallowAPICourse(BaseModel):
 class _APIRecord(BaseModel):
     id: UUID7
     player: _APIPlayer
+    server: _ShallowAPIServer
     map: _ShallowAPIMap
     course: _ShallowAPICourse
     teleports: int
@@ -117,7 +121,8 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
                         player_name=record.player.name, player_url=player_url,
                         map=api_map, time=record.time,
                         teleports=record.teleports, points=int(points),
-                        point_scale=10000, place=place, date=submitted_at)
+                        point_scale=10000, place=place, date=submitted_at,
+                        server=record.server.name)
 
 class CS2API(API):
     @override

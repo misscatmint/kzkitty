@@ -137,7 +137,8 @@ async def pb_component(pb: PersonalBest, player: Player, user: User
     gallery = MediaGalleryComponentBuilder()
     gallery.add_media_gallery_item(pb.map.thumbnail_url)
     container.add_component(gallery)
-    container.add_text_display(f'-# <t:{int(pb.date.timestamp())}>')
+    container.add_text_display(f'-# <t:{int(pb.date.timestamp())}> '
+                               f'on {pb.server}')
     return container
 
 async def profile_component(profile: Profile, player: Player, user: User
