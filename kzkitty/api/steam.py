@@ -21,7 +21,9 @@ class SteamProfile:
 
 class Steam:
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncPoolManager = AsyncPoolManager(timeout=timeout)
+        headers = {'User-Agent': 'kzkitty/0.1'}
+        self._session: AsyncPoolManager = AsyncPoolManager(headers=headers,
+                                                           timeout=timeout)
 
     async def close(self) -> None:
         await self._session.clear()
