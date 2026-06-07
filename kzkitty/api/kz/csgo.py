@@ -51,6 +51,7 @@ class _APIRecord(BaseModel):
     teleports: int
     points: int
     created_on: Annotated[datetime, AfterValidator(_utc_datetime)]
+    server_name: str
 
 class _APIPlayerRank(BaseModel):
     player_name: str | None
@@ -109,7 +110,8 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap, place: int | None=None
                         player_name=record.player_name, player_url=player_url,
                         map=api_map, time=record.time,
                         teleports=record.teleports, points=record.points,
-                        point_scale=1000, place=place, date=record.created_on)
+                        point_scale=1000, place=place, date=record.created_on,
+                        server=record.server_name)
 
 class CSGOAPI(API):
     @override

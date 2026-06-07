@@ -55,6 +55,7 @@ class PersonalBest:
     point_scale: int
     place: int | None
     date: datetime
+    server: str
 
 class Rank(StrEnum):
     UNKNOWN = 'Unknown'
