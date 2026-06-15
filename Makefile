@@ -13,6 +13,7 @@ lint:
 	ruff check
 	ty check
 	pyrefly check
+	zuban check
 	mypy .
 	basedpyright
 
