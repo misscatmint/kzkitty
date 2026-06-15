@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
-from urllib3 import AsyncPoolManager
-from urllib3.exceptions import HTTPError
+from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
 
 class SteamError(Exception):
     pass
@@ -21,9 +20,7 @@ class SteamProfile:
 
 class Steam:
     def __init__(self, timeout: int | None=None) -> None:
-        headers = {'User-Agent': 'kzkitty/0.1'}
-        self._session: AsyncPoolManager = AsyncPoolManager(headers=headers,
-                                                           timeout=timeout)
+        self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
 
     async def close(self) -> None:
         await self._session.clear()
