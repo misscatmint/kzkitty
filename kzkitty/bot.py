@@ -221,13 +221,15 @@ async def _slash_register(ctx: _Context, profile: _SteamProfileURLOption,
     except SteamValueError:
         await ctx.respond('Invalid Steam profile URL',
                           flags=MessageFlag.EPHEMERAL)
-    else:
-        defaults: dict[str, int | Mode] = {'steamid64': steamid64}
-        defaults['mode'] = Mode(mode_name)
-        await Player.update_or_create(user_id=ctx.user.id,
-                                      server_id=ctx.guild_id,
-                                      defaults=defaults)
-        await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
+        return
+
+    defaults: dict[str, int | Mode] = {'steamid64': steamid64}
+    defaults['mode'] = Mode(mode_name)
+    await Player.update_or_create( # pyright: ignore[reportUnknownMemberType]
+                                  user_id=ctx.user.id,
+                                  server_id=ctx.guild_id,
+                                  defaults=defaults)
+    await ctx.respond('Registered', flags=MessageFlag.EPHEMERAL)
 
 @slash_command('unregister', 'Delete account settings')
 async def _slash_unregister(ctx: _Context) -> None:

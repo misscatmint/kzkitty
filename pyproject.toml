@@ -17,7 +17,7 @@ dependencies = [
 pythonVersion = "3.13"
 reportImplicitStringConcatenation = false
 reportUnusedCallResult = false
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 
 [tool.mypy]
 native_parser = true
@@ -40,6 +40,8 @@ python-version = "3.13"
 
 [tool.ty.rules]
 division-by-zero = "warn"
+missing-override-decorator = "warn"
+missing-type-argument = "warn"
 possibly-missing-attribute = "warn"
 possibly-missing-import = "warn"
 possibly-unresolved-reference = "warn"
@@ -48,3 +50,7 @@ unsupported-dynamic-base = "warn"
 [tool.uv.sources.hikari]
 git = "https://github.com/hikari-py/hikari.git"
 rev = "222aab1bcd54bba9292d0087271a289a0742a56b"
+
+[tool.uv.sources.tortoise-orm]
+git = "https://github.com/tortoise/tortoise-orm.git"
+rev = "ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d"
