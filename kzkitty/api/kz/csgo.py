@@ -8,9 +8,8 @@ from pydantic import (AfterValidator, BaseModel, Field, TypeAdapter,
                       ValidationError)
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
-from urllib3 import AsyncPoolManager
-from urllib3.exceptions import HTTPError
 
+from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank,
@@ -116,9 +115,7 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap, place: int | None=None
 class CSGOAPI(API):
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        headers = {'User-Agent': 'kzkitty/0.1'}
-        self._session: AsyncPoolManager = AsyncPoolManager(headers=headers,
-                                                           timeout=timeout)
+        self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
 
     @override
     async def close(self) -> None:
