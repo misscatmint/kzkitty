@@ -561,8 +561,8 @@ requires-dist = [
     { name = "hikari", extras = ["server", "speedups"], git = "https://github.com/hikari-py/hikari.git?rev=222aab1bcd54bba9292d0087271a289a0742a56b" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "tortoise-orm", specifier = ">=1.1.7" },
-    { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.20.907" },
+    { name = "tortoise-orm", git = "https://github.com/tortoise/tortoise-orm.git?rev=ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d" },
+    { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.21.902" },
     { name = "uvloop", specifier = ">=0.22.1" },
 ]
 
@@ -995,16 +995,12 @@ wheels = [
 [[package]]
 name = "tortoise-orm"
 version = "1.1.7"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/tortoise/tortoise-orm.git?rev=ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d#ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "anyio" },
     { name = "iso8601", marker = "python_full_version < '4'" },
     { name = "pypika-tortoise" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/55/e75d3ae0dd2c96cf961bf068f465fb62ec481d802beb65f406620bfd40a0/tortoise_orm-1.1.7.tar.gz", hash = "sha256:a0f0f27f9c92547739f0a3f0862c257ab64d8baadbc0e548cbcfa2d70bcbe275", size = 387489, upload-time = "2026-03-21T20:03:29.087Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bf/9b/e7e5b4f4e9433b9d9c389afc62ea0ed2597626842dc0f76dd7b54eb32cdd/tortoise_orm-1.1.7-py3-none-any.whl", hash = "sha256:b640b786905891cc120aa16d1a7af18cd54b111a812f9b1c1d1c7b294d62949d", size = 272437, upload-time = "2026-03-21T20:03:27.539Z" },
 ]
 
 [[package]]

@@ -6,7 +6,8 @@ from urllib.parse import quote, urlencode
 
 from pydantic import BaseModel, ValidationError, UUID7
 from tortoise.exceptions import DoesNotExist
-from tortoise.transactions import in_transaction
+from tortoise.transactions import (
+   in_transaction) # pyright: ignore[reportUnknownVariableType]
 
 from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
@@ -183,7 +184,7 @@ class CS2API(API):
                         await db_map.save()
                         is_updated = True
 
-                db_api_courses = []
+                db_api_courses: list[_APICourse] = []
                 db_courses = (await Course.filter(map_id=api_map.id)
                                           .order_by('course_id'))
                 for db_course in db_courses:

@@ -25,7 +25,7 @@ class Steam:
     async def close(self) -> None:
         await self._session.clear()
 
-    async def _get_profile(self, url: str) -> ElementTree.Element:
+    async def _get_profile(self, url: str) -> ElementTree.Element[str]:
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
