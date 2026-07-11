@@ -561,7 +561,7 @@ requires-dist = [
     { name = "hikari", extras = ["server", "speedups"], git = "https://github.com/hikari-py/hikari.git?rev=222aab1bcd54bba9292d0087271a289a0742a56b" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "tortoise-orm", git = "https://github.com/tortoise/tortoise-orm.git?rev=ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d" },
+    { name = "tortoise-orm", git = "https://github.com/tortoise/tortoise-orm.git?rev=8c12adc46c534a16cd9abf589b94e77d52ecf919" },
     { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.21.902" },
     { name = "uvloop", specifier = ">=0.22.1" },
 ]
@@ -995,7 +995,7 @@ wheels = [
 [[package]]
 name = "tortoise-orm"
 version = "1.1.7"
-source = { git = "https://github.com/tortoise/tortoise-orm.git?rev=ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d#ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d" }
+source = { git = "https://github.com/tortoise/tortoise-orm.git?rev=8c12adc46c534a16cd9abf589b94e77d52ecf919#8c12adc46c534a16cd9abf589b94e77d52ecf919" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "anyio" },

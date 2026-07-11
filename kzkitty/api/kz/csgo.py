@@ -7,8 +7,7 @@ from urllib.parse import quote, quote_plus, urlencode
 from pydantic import (AfterValidator, BaseModel, Field, TypeAdapter,
                       ValidationError)
 from tortoise.exceptions import DoesNotExist
-from tortoise.transactions import (
-   in_transaction) # pyright: ignore[reportUnknownVariableType]
+from tortoise.transactions import in_transaction
 
 from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
 from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
