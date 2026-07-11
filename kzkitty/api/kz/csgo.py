@@ -69,6 +69,7 @@ class _GOKZTopRecord(BaseModel):
     map_name: str
     stage: int
     teleports: int
+    created_on: Annotated[datetime, AfterValidator(_utc_datetime)]
 
 _GOKZTopRecordList = TypeAdapter(list[_GOKZTopRecord])
 
@@ -527,22 +528,17 @@ class CSGOAPI(API):
         # maps, whereas the global API has an issue that prevents them from
         # showing up in certain areas of the API (like when asking for the
         # latest runs for a user).
+        #
+        # Sometimes gokz.top is out of date and doesn't return the latest run.
+        # Due to that, we still check the global API for a latest run and
+        # we return whichever is newest.
         try:
             gokz_top = await self._gokz_top_for_steamid64(steamid64, mode,
                                                           stage=0,
                                                           tp_type=tp_type)
         except APIError:
             _logger.exception("Couldn't get latest PB from gokz.top")
-        else:
-            if gokz_top is not None:
-                try:
-                    api_map = await self.get_map(gokz_top.map_name, mode,
-                                                 bonus=gokz_top.stage)
-                except APIMapError:
-                    _logger.exception("Invalid map name from gokz.top")
-                else:
-                    tp_type = Type.PRO if gokz_top.teleports == 0 else Type.TP
-                    return await self.get_pb(steamid64, api_map, tp_type)
+            gokz_top = None
 
         records: list[_APIRecord]
         pros: list[_APIRecord]
@@ -559,11 +555,25 @@ class CSGOAPI(API):
         else:
             pros = []
         records += pros
-        if not records:
-            return None
+        if records:
+            records.sort(key=lambda r: r.created_on, reverse=True)
+            record = records[0]
+        else:
+            record = None
 
-        records.sort(key=lambda r: r.created_on, reverse=True)
-        record = records[0]
+        if (gokz_top is not None and
+            (record is None or gokz_top.created_on > record.created_on)):
+            try:
+                api_map = await self.get_map(gokz_top.map_name, mode,
+                                             bonus=gokz_top.stage)
+            except APIMapError:
+                _logger.exception('Invalid map name from gokz.top')
+            else:
+                tp_type = Type.PRO if gokz_top.teleports == 0 else Type.TP
+                return await self.get_pb(steamid64, api_map, tp_type)
+
+        if record is None:
+            return None
         try:
             api_map = await self.get_map(record.map_name, mode)
         except APIMapError as e:
