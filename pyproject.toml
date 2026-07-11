@@ -53,4 +53,4 @@ rev = "222aab1bcd54bba9292d0087271a289a0742a56b"
 
 [tool.uv.sources.tortoise-orm]
 git = "https://github.com/tortoise/tortoise-orm.git"
-rev = "ff7ef94ee72bdc7fe5002df2858f1c7e3d6b2f3d"
+rev = "8c12adc46c534a16cd9abf589b94e77d52ecf919"
