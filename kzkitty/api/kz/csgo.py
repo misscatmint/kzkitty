@@ -1,5 +1,6 @@
 import logging
 import re
+from asyncio import TaskGroup
 from datetime import datetime, timedelta, UTC
 from typing import Annotated, override
 from urllib.parse import quote, quote_plus, urlencode
@@ -532,34 +533,42 @@ class CSGOAPI(API):
         # Sometimes gokz.top is out of date and doesn't return the latest run.
         # Due to that, we still check the global API for a latest run and
         # we return whichever is newest.
-        try:
-            gokz_top = await self._gokz_top_for_steamid64(steamid64, mode,
+        async def get_gokz_top() -> _GOKZTopRecord | None:
+            try:
+                return await self._gokz_top_for_steamid64(steamid64, mode,
                                                           stage=0,
                                                           tp_type=tp_type)
-        except APIError:
-            _logger.exception("Couldn't get latest PB from gokz.top")
-            gokz_top = None
+            except APIError:
+                _logger.exception("Couldn't get latest PB from gokz.top")
+                return None
 
-        records: list[_APIRecord]
-        pros: list[_APIRecord]
-        if tp_type in {Type.TP, Type.ANY}:
-            records = await self._records_for_steamid64(steamid64, mode,
-                                                        stage=0,
-                                                        tp_type=Type.TP)
-        else:
-            records = []
-        if tp_type in {Type.PRO, Type.ANY}:
-            pros = await self._records_for_steamid64(steamid64, mode,
-                                                     stage=0,
-                                                     tp_type=Type.PRO)
-        else:
-            pros = []
-        records += pros
-        if records:
-            records.sort(key=lambda r: r.created_on, reverse=True)
-            record = records[0]
-        else:
-            record = None
+        async def get_global_api() -> _APIRecord | None:
+            records: list[_APIRecord]
+            pros: list[_APIRecord]
+            if tp_type in {Type.TP, Type.ANY}:
+                records = await self._records_for_steamid64(steamid64, mode,
+                                                            stage=0,
+                                                            tp_type=Type.TP)
+            else:
+                records = []
+            if tp_type in {Type.PRO, Type.ANY}:
+                pros = await self._records_for_steamid64(steamid64, mode,
+                                                         stage=0,
+                                                         tp_type=Type.PRO)
+            else:
+                pros = []
+            records += pros
+            if records:
+                records.sort(key=lambda r: r.created_on, reverse=True)
+                return records[0]
+            else:
+                return None
+
+        async with TaskGroup() as tg:
+            gokz_top_task = tg.create_task(get_gokz_top())
+            global_api_task = tg.create_task(get_global_api())
+        gokz_top = gokz_top_task.result()
+        record = global_api_task.result()
 
         if (gokz_top is not None and
             (record is None or gokz_top.created_on > record.created_on)):
