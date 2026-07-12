@@ -435,11 +435,10 @@ class CSGOAPI(API):
             try:
                 r = await self._session.request('GET', url)
                 if r.status != 200:
-                    _logger.error("Couldn't get global API SKZ record filter "
-                                  '(HTTP %s)', r.status)
-                    skz_possible = None
+                    raise APIError("Couldn't get global API SKZ record filter"
+                                   f' (HTTP {r.status})')
                 json = await r.data
-            except HTTPError:
+            except (APIError, HTTPError):
                 _logger.exception("Couldn't get global API SKZ record filter")
                 skz_possible = None
             else:
