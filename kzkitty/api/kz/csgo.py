@@ -541,33 +541,30 @@ class CSGOAPI(API):
                 _logger.exception("Couldn't get latest PB from gokz.top")
                 return None
 
-        async def get_global_api() -> _APIRecord | None:
-            records: list[_APIRecord]
-            pros: list[_APIRecord]
-            if tp_type in {Type.TP, Type.ANY}:
-                records = await self._records_for_steamid64(steamid64, mode,
-                                                            stage=0,
-                                                            tp_type=Type.TP)
-            else:
-                records = []
-            if tp_type in {Type.PRO, Type.ANY}:
-                pros = await self._records_for_steamid64(steamid64, mode,
-                                                         stage=0,
-                                                         tp_type=Type.PRO)
-            else:
-                pros = []
-            records += pros
-            if records:
-                records.sort(key=lambda r: r.created_on, reverse=True)
-                return records[0]
-            else:
-                return None
-
         async with TaskGroup() as tg:
             gokz_top_task = tg.create_task(get_gokz_top())
-            global_api_task = tg.create_task(get_global_api())
+            if tp_type in {Type.TP, Type.ANY}:
+                tps_task = tg.create_task(
+                        self._records_for_steamid64(steamid64, mode, stage=0,
+                                                    tp_type=Type.TP))
+            else:
+                tps_task = None
+            if tp_type in {Type.PRO, Type.ANY}:
+                pros_task = tg.create_task(
+                        self._records_for_steamid64(steamid64, mode, stage=0,
+                                                    tp_type=Type.PRO))
+            else:
+                pros_task = None
         gokz_top = gokz_top_task.result()
-        record = global_api_task.result()
+        records = tps_task.result() if tps_task is not None else []
+        pros = pros_task.result() if pros_task is not None else []
+
+        records += pros
+        if records:
+            records.sort(key=lambda r: r.created_on, reverse=True)
+            record = records[0]
+        else:
+            record = None
 
         if (gokz_top is not None and
             (record is None or gokz_top.created_on > record.created_on)):
