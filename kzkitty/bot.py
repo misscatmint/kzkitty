@@ -32,13 +32,13 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            api_timeout: int, steam_timeout: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
-    client.include(_slash_register) # ty: ignore[invalid-argument-type]
-    client.include(_slash_unregister) # ty: ignore[invalid-argument-type]
-    client.include(_slash_mode) # ty: ignore[invalid-argument-type]
-    client.include(_slash_pb) # ty: ignore[invalid-argument-type]
-    client.include(_slash_latest) # ty: ignore[invalid-argument-type]
-    client.include(_slash_map) # ty: ignore[invalid-argument-type]
-    client.include(_slash_profile) # ty: ignore[invalid-argument-type]
+    client.include(_slash_register)
+    client.include(_slash_unregister)
+    client.include(_slash_mode)
+    client.include(_slash_pb)
+    client.include(_slash_latest)
+    client.include(_slash_map)
+    client.include(_slash_profile)
 
     # This uses minutes because the hours and days parameters are broken in arc
     refresh_db_loop = IntervalLoop(refresh_map_db,
