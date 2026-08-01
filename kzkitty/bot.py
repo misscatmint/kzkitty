@@ -45,8 +45,8 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
                                    minutes=refresh_db_hours * 60,
                                    run_on_start=True)
     async def startup(_: _Client) -> None:
-        await init_api(timeout=api_timeout)
-        await init_steam(timeout=steam_timeout)
+        init_api(timeout=api_timeout)
+        init_steam(timeout=steam_timeout)
         await init_db(db_url)
         task = asyncio.create_task(import_default_players())
         _tasks.add(task)
@@ -303,7 +303,7 @@ async def _slash_map(ctx: _Context, map_name: _MapOption,
 
     api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
     wrs = await api.get_wrs(api_map)
-    component = await map_component(api_map, wrs)
+    component = map_component(api_map, wrs)
     await ctx.respond(component=component)
 
 @slash_command('profile', 'Show rank, point total, and point average',

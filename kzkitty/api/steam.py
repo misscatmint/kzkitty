@@ -72,7 +72,7 @@ class Steam:
 
 _steam: Steam | None = None
 
-async def init_steam(timeout: int | None=None) -> None:
+def init_steam(timeout: int | None=None) -> None:
     global _steam
     if _steam is None:
         _steam = Steam(timeout=timeout)
