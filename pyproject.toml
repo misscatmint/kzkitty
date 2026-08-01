@@ -32,7 +32,17 @@ line-length = 80
 select = ["A", "ANN", "ARG", "BLE", "C4", "DTZ", "E", "ERA", "F", "FIX",
           "FURB", "ISC", "INP", "G", "PERF", "PIE", "RSE", "RUF", "S", "SIM",
           "SLF", "T20", "TC", "TID", "UP", "W"]
-ignore = ["S314"]
+ignore = [
+    "blank-lines-after-function-or-class",
+    "blank-lines-before-nested-definition",
+    "blank-lines-top-level",
+    "missing-whitespace-around-parameter-equals",
+    "non-empty-init-module",
+    "suspicious-xml-element-tree-usage",
+    "suspicious-xml-etree-import",
+    "too-few-spaces-before-inline-comment",
+]
+preview = true
 
 [tool.pyrefly]
 preset = "strict"
