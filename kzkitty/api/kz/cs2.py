@@ -271,7 +271,7 @@ class CS2API(API):
         if bonus is not None:
             raise APIMapError("Bonuses aren't supported on CS2. "
                               'Did you mean to specify a course?')
-        if not re.fullmatch('[A-za-z0-9_]+', name):
+        if not re.fullmatch(r'[A-za-z0-9_]+', name):
             raise APIMapError('Invalid map name')
 
         db_map = None
