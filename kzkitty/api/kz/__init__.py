@@ -17,7 +17,7 @@ _cs2_api: CS2API | None = None
 
 _logger = logging.getLogger('kzkitty.api.kz')
 
-async def init_api(timeout: int | None=None) -> None:
+def init_api(timeout: int | None=None) -> None:
     global _csgo_api, _cs2_api
     if _csgo_api is None:
         _csgo_api = CSGOAPI(timeout=timeout)

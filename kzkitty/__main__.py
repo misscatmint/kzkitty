@@ -11,7 +11,7 @@ from kzkitty.models import (close_db, dump_players, export_default_players,
 _logger = logging.getLogger('kzkitty')
 
 async def _refresh(db_url: str, api_timeout: int) -> None:
-    await init_api(timeout=api_timeout)
+    init_api(timeout=api_timeout)
     await init_db(db_url)
     try:
         await refresh_map_db()

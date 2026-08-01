@@ -195,8 +195,8 @@ def _wr_time(pb: PersonalBest) -> str:
     player_name = pb.player_name or pb.steamid64
     return f'{_formattime(pb.time)} by [{player_name}]({pb.player_url})'
 
-async def map_component(api_map: APIMap, wrs: list[PersonalBest],
-                        ) -> ContainerComponentBuilder:
+def map_component(api_map: APIMap, wrs: list[PersonalBest]
+                  ) -> ContainerComponentBuilder:
     map_info = _map_info(api_map)
     body = f"""## [{api_map.name}]({api_map.url})
 
