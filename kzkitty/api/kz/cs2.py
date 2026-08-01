@@ -423,8 +423,8 @@ class CS2API(API):
 
         rating = {Mode.CKZ: profile.ckz_rating,
                   Mode.VNL2: profile.vnl_rating}[mode]
-        points = rating / 10
-        if points == 0.0:
+        points = rating / 10.0
+        if not points:
             rank = Rank.NEW
         else:
             thresholds = [(37500.0, Rank.LEGEND),
