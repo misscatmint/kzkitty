@@ -59,8 +59,4 @@ unsupported-dynamic-base = "warn"
 
 [tool.uv.sources.hikari]
 git = "https://github.com/hikari-py/hikari.git"
-rev = "1353f5a3c5357339ad1aa8bcd54c5c738d31be82"
-
-[tool.uv.sources.tortoise-orm]
-git = "https://github.com/tortoise/tortoise-orm.git"
-rev = "8c12adc46c534a16cd9abf589b94e77d52ecf919"
+rev = "1ae003c70feeed6b7d346eb49f1cb541922a0f23"
