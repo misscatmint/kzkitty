@@ -139,14 +139,14 @@ wheels = [
 
 [[package]]
 name = "alluka"
-version = "0.3.3"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/70/85/9ff6e496788aba9b74bc46c97fc77e53d4eb7b98fb416a0737e2ce5cb81e/alluka-0.3.3.tar.gz", hash = "sha256:92d254d7ab073275ce385bb1a2c4bec1c4eb26bbfd2aae7b57e5f8554cb4a037", size = 266495, upload-time = "2024-10-13T15:54:26.27Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/ca/042a60f53edef08475b335014ccf1c29bdfcdaf7a952c1b18618d4dedddb/alluka-0.4.0.tar.gz", hash = "sha256:25ca19ffe47eab876ea1a6cc118af9b30dd075ac1bf706a248750ab38e0c5c9b", size = 218656, upload-time = "2024-11-24T19:16:07.823Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/d9/67f23fbb6615b60c957d0b57b83e08c077474e70afc29abf77dda0ba35db/alluka-0.3.3-py3-none-any.whl", hash = "sha256:4d686949e1c28a23831584aec1ea7151c2e2234bb6369115e7c421a2af6cce7d", size = 69624, upload-time = "2024-10-13T15:54:24.87Z" },
+    { url = "https://files.pythonhosted.org/packages/74/ff/a3eb3861e9203d35f8ad9ec06e5d20d871a39848b838a53f7675f76a5838/alluka-0.4.0-py3-none-any.whl", hash = "sha256:758f4d0623dc8e895949fedac8e9fb124cfdd412b9608ab5eba7f8db316692e0", size = 27037, upload-time = "2024-11-24T19:16:05.998Z" },
 ]
 
 [[package]]
@@ -460,13 +460,17 @@ wheels = [
 
 [[package]]
 name = "hikari"
-version = "2.5.1.dev0"
-source = { git = "https://github.com/hikari-py/hikari.git?rev=1ae003c70feeed6b7d346eb49f1cb541922a0f23#1ae003c70feeed6b7d346eb49f1cb541922a0f23" }
+version = "2.6.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "attrs" },
     { name = "colorlog" },
     { name = "multidict" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/32/da/689f9af3f99cdc53b6975107cfce6688576d2bf2d69ab39b4b89fb0b60d6/hikari-2.6.0.tar.gz", hash = "sha256:01c48e8bd298edafee3af0ceb369497151bed4c483e2a4c1b588030752173434", size = 1953088, upload-time = "2026-08-19T15:58:36.411Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/63/2ef231f81a4235651b0401a8abb841e24db2c6a0a3c492dfc4c576a847ad/hikari-2.6.0-py3-none-any.whl", hash = "sha256:e78f501404deba5e852b74bc9d4e8f95fd5fae17ab525a13614a5b9887fd905f", size = 594173, upload-time = "2026-08-19T15:58:34.537Z" },
 ]
 
 [package.optional-dependencies]
@@ -482,16 +486,12 @@ speedups = [
 
 [[package]]
 name = "hikari-arc"
-version = "2.3.0"
-source = { registry = "https://pypi.org/simple" }
+version = "2.3.2"
+source = { git = "https://github.com/hypergonial/hikari-arc.git?rev=8f7446428c7beb72fa40e13136772222c26f0261#8f7446428c7beb72fa40e13136772222c26f0261" }
 dependencies = [
     { name = "alluka" },
     { name = "attrs" },
     { name = "hikari" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/32/77/bba7d9a4d0026e8e84aac6aedfba2eb77d7afa1ce4013ad4bddd30334422/hikari_arc-2.3.0.tar.gz", hash = "sha256:a7ee2515965e6dc4390dbc3563f569c7e26c729caea68816cec660fd676eb499", size = 1480119, upload-time = "2026-05-01T19:45:10.075Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/f3/d218776e22fcab9509a5d285b761d9d35e7bf852ee122e83fba6121a54eb/hikari_arc-2.3.0-py3-none-any.whl", hash = "sha256:38821f305127312b4a9337e5dc25cefaf1bed1561cdd4ad269430e970c97488e", size = 127582, upload-time = "2026-05-01T19:45:11.741Z" },
 ]
 
 [package.optional-dependencies]
@@ -586,8 +586,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hikari", extras = ["server", "speedups"], git = "https://github.com/hikari-py/hikari.git?rev=1ae003c70feeed6b7d346eb49f1cb541922a0f23" },
-    { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.0" },
+    { name = "hikari", extras = ["server", "speedups"], specifier = ">=2.6.0" },
+    { name = "hikari-arc", extras = ["rest"], git = "https://github.com/hypergonial/hikari-arc.git?rev=8f7446428c7beb72fa40e13136772222c26f0261" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "tortoise-orm", specifier = ">=1.1.7" },
     { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.22.901" },

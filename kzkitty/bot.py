@@ -41,8 +41,7 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.include(_slash_profile)
 
     # This uses minutes because the hours and days parameters are broken in arc
-    refresh_db_loop = IntervalLoop(refresh_map_db,
-                                   minutes=refresh_db_hours * 60,
+    refresh_db_loop = IntervalLoop(refresh_map_db, hours=refresh_db_hours,
                                    run_on_start=True)
     async def startup(_: _Client) -> None:
         init_api(timeout=api_timeout)
@@ -93,22 +92,26 @@ async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
                      .values('name'))
     return [m['name'] for m in maps]
 
-_SteamProfileURLOption = Annotated[str, StrParams('Steam profile URL')]
-_MapOption = Annotated[str, StrParams('Map name', name='map',
+type _SteamProfileURLOption = Annotated[str, StrParams('Steam profile URL')]
+type _MapOption = Annotated[str,
+                            StrParams('Map name', name='map',
                                       autocomplete_with=_autocomplete_map)]
-_ModeOption = Annotated[str, StrParams('Game mode', name='mode',
+type _ModeOption = Annotated[str,
+                             StrParams('Game mode', name='mode',
                                        choices=[Mode.KZT, Mode.SKZ, Mode.VNL,
                                                 Mode.CKZ, Mode.VNL2])]
-_MaybeModeOption = Annotated[str | None, StrParams('Game mode', name='mode',
-                                                   choices=[Mode.KZT, Mode.SKZ,
-                                                            Mode.VNL, Mode.CKZ,
-                                                            Mode.VNL2])]
-_MaybePlayerOption = Annotated[Member | None, MemberParams('Player',
-                                                           name='player')]
-_TypeOption = Annotated[str, StrParams('Pro or teleport run', name='type',
+type _MaybeModeOption = Annotated[str | None,
+                                  StrParams('Game mode', name='mode',
+                                            choices=[Mode.KZT, Mode.SKZ,
+                                                     Mode.VNL, Mode.CKZ,
+                                                     Mode.VNL2])]
+type _MaybePlayerOption = Annotated[Member | None,
+                                    MemberParams('Player', name='player')]
+type _TypeOption = Annotated[str,
+                             StrParams('Pro or teleport run', name='type',
                                        choices=[Type.PRO, Type.TP, Type.ANY])]
-_MaybeCourseOption = Annotated[str | None, StrParams('Course')]
-_MaybeBonusOption = Annotated[int | None, IntParams('Bonus', min=1)]
+type _MaybeCourseOption = Annotated[str | None, StrParams('Course')]
+type _MaybeBonusOption = Annotated[int | None, IntParams('Bonus', min=1)]
 
 class _PlayerNotFound(Exception):
     pass
