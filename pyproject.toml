@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "hikari-arc[rest]>=2.3.0",
-    "hikari[server,speedups]>=2.5.0",
+    "hikari[server,speedups]>=2.6.0",
     "pydantic>=2.13.4",
     "tortoise-orm>=1.1.7",
     "urllib3-future[brotli,zstd]>=2.22.901",
@@ -57,6 +57,6 @@ possibly-missing-import = "warn"
 possibly-unresolved-reference = "warn"
 unsupported-dynamic-base = "warn"
 
-[tool.uv.sources.hikari]
-git = "https://github.com/hikari-py/hikari.git"
-rev = "1ae003c70feeed6b7d346eb49f1cb541922a0f23"
+[tool.uv.sources.hikari-arc]
+git = "https://github.com/hypergonial/hikari-arc.git"
+rev = "8f7446428c7beb72fa40e13136772222c26f0261"
