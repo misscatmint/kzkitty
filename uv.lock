@@ -589,8 +589,8 @@ requires-dist = [
     { name = "hikari", extras = ["server", "speedups"], specifier = ">=2.6.0" },
     { name = "hikari-arc", extras = ["rest"], git = "https://github.com/hypergonial/hikari-arc.git?rev=8f7446428c7beb72fa40e13136772222c26f0261" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "tortoise-orm", specifier = ">=1.1.7" },
-    { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.22.901" },
+    { name = "tortoise-orm", specifier = ">=1.1.8" },
+    { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.24.903" },
     { name = "uvloop", specifier = ">=0.22.1" },
 ]
 
