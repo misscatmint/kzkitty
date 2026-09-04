@@ -5,7 +5,7 @@ description = "Discord bot for the CS:GO and CS2 KZ global APIs."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "hikari-arc[rest]>=2.3.0",
+    "hikari-arc[rest]>=2.3.2",
     "hikari[server,speedups]>=2.6.0",
     "pydantic>=2.13.4",
     "tortoise-orm>=1.1.8",
@@ -56,7 +56,3 @@ possibly-missing-attribute = "warn"
 possibly-missing-import = "warn"
 possibly-unresolved-reference = "warn"
 unsupported-dynamic-base = "warn"
-
-[tool.uv.sources.hikari-arc]
-git = "https://github.com/hypergonial/hikari-arc.git"
-rev = "8f7446428c7beb72fa40e13136772222c26f0261"
