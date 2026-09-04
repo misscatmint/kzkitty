@@ -487,11 +487,15 @@ speedups = [
 [[package]]
 name = "hikari-arc"
 version = "2.3.2"
-source = { git = "https://github.com/hypergonial/hikari-arc.git?rev=8f7446428c7beb72fa40e13136772222c26f0261#8f7446428c7beb72fa40e13136772222c26f0261" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alluka" },
     { name = "attrs" },
     { name = "hikari" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/56/b4/4ac5d1a96e3ac614cd418a53e3ec74a25de94a1ded299d1e270522bcfad0/hikari_arc-2.3.2.tar.gz", hash = "sha256:e6770b6c9355c3236deb47af1f717b395a20f465f68926b0c931c56a86fd2212", size = 1467308, upload-time = "2026-08-19T17:17:23.298Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/f0/6897e549a2702ef0d5c32e5ccbc923bc20eb5f0ffe0fbf667876866db650/hikari_arc-2.3.2-py3-none-any.whl", hash = "sha256:fe5561e55e57b499dd1712e89b0eb6ac4c35598beefc77602a2c0c8fbf194eb0", size = 127427, upload-time = "2026-08-19T17:17:21.766Z" },
 ]
 
 [package.optional-dependencies]
@@ -587,7 +591,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hikari", extras = ["server", "speedups"], specifier = ">=2.6.0" },
-    { name = "hikari-arc", extras = ["rest"], git = "https://github.com/hypergonial/hikari-arc.git?rev=8f7446428c7beb72fa40e13136772222c26f0261" },
+    { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "tortoise-orm", specifier = ">=1.1.8" },
     { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.24.903" },
