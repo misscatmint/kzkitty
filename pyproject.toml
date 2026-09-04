@@ -7,9 +7,9 @@ requires-python = ">=3.13"
 dependencies = [
     "hikari-arc[rest]>=2.3.2",
     "hikari[server,speedups]>=2.6.0",
-    "pydantic>=2.13.4",
+    "pydantic>=2.13.5",
     "tortoise-orm>=1.1.8",
-    "urllib3-future[brotli,zstd]>=2.24.903",
+    "urllib3-future[brotli,zstd]>=2.24.906",
     "uvloop>=0.22.1",
 ]
 
