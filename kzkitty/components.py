@@ -6,7 +6,7 @@ from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
-from kzkitty.api.a2s import Server
+from kzkitty.api import a2s
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 from kzkitty.models import Player
@@ -245,17 +245,18 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
     container.add_component(gallery)
     return container
 
-def server_component(server: Server, api_map: APIMap | None
+def server_component(server: a2s.Server, api_map: APIMap | None
                      ) -> ContainerComponentBuilder:
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
     else:
         map_name = server.full_map_name.replace('_', r'\_')
     port = f':{server.port}' if server.port != 27015 else ''
+    game = {a2s.Game.CSGO: 'CSGO', a2s.Game.CS2: 'CS2'}.get(server.game,
+                                                            server.game)
     body = f"""## {server.name}
 
-**Game**: {server.game}
-**IP**: {server.host}{port}
+**IP**: {server.host}{port} ({game})
 **Map**: {map_name}"""
     if api_map is not None:
         body += _map_info(api_map, include_course=False, include_mode=False)
@@ -272,4 +273,13 @@ def server_component(server: Server, api_map: APIMap | None
         gallery = MediaGalleryComponentBuilder()
         gallery.add_media_gallery_item(api_map.thumbnail_url)
         container.add_component(gallery)
+    return container
+
+def server_failed_component(address: str, reason: str
+                            ) -> ContainerComponentBuilder:
+    body = f"""## {address}
+
+{reason}"""
+    container = ContainerComponentBuilder()
+    container.add_text_display(body)
     return container

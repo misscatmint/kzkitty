@@ -60,16 +60,18 @@ def main(args: list[str]) -> None:
 
     discord_token = os.environ['KZKITTY_DISCORD_TOKEN']
     refresh_db_hours = int(os.environ.get('KZKITTY_REFRESH_DB_HOURS', 24))
+    refresh_server_mins = int(os.environ.get('KZKITTY_REFRESH_SERVER_MINS',
+                                             1))
     steam_timeout = int(os.environ.get('KZKITTY_STEAM_TIMEOUT', 2))
     a2s_timeout = int(os.environ.get('KZKITTY_A2S_TIMEOUT', 2))
     rest = os.environ.get('KZKITTY_REST')
     if rest:
         host, port = rest.split(':', 1)
         runrest(host, int(port), discord_token, db_url, refresh_db_hours,
-                api_timeout, steam_timeout, a2s_timeout)
+                refresh_server_mins, api_timeout, steam_timeout, a2s_timeout)
     else:
-        run(discord_token, db_url, refresh_db_hours, api_timeout,
-            steam_timeout, a2s_timeout)
+        run(discord_token, db_url, refresh_db_hours, refresh_server_mins,
+            api_timeout, steam_timeout, a2s_timeout)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
