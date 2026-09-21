@@ -15,7 +15,7 @@ class QueryError(Exception):
 class QueryInvalidAddressError(Exception):
     pass
 
-class QueryConnectionError(Exception):
+class QueryTimeoutError(Exception):
     pass
 
 class QueryA2SError(Exception):
@@ -85,7 +85,7 @@ async def query_server(host: str, port: int | None, timeout: int | None=None
     except A2SError as e:
         raise QueryA2SError from e
     except TimeoutError as e:
-        raise QueryConnectionError from e
+        raise QueryTimeoutError from e
 
     players = [Player(p.name, duration=timedelta(seconds=p.duration))
                for p in player_info.players]
