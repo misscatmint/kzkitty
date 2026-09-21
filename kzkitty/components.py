@@ -34,12 +34,13 @@ def _avatar_container(avatar_url: str | None, accent_color: Color, body: str
         container.add_text_display(body)
     return container
 
-def _formattime(td: timedelta, microseconds: bool=True) -> str:
+def _formattime(td: timedelta, microseconds: bool=True, force_minutes=False
+                ) -> str:
     mm, ss = divmod(td.seconds, 60)
     hh, mm = divmod(mm, 60)
     if hh:
         s = f'{hh:d}:{mm:02d}:{ss:02d}'
-    elif mm:
+    elif mm or force_minutes:
         s = f'{mm:d}:{ss:02d}'
     else:
         s = f'{ss:d}'
@@ -263,7 +264,8 @@ def server_component(server: a2s.Server, api_map: APIMap | None
     body += f"""
 **Players**: {server.player_count}/{server.max_players}"""
     for player in server.players:
-        player_time = _formattime(player.duration, microseconds=False)
+        player_time = _formattime(player.duration, microseconds=False,
+                                  force_minutes=True)
         body += f"""
 - {player.name} ({player_time})"""
 
