@@ -6,6 +6,7 @@ from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
+from kzkitty.api.a2s import Server
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 from kzkitty.models import Player
@@ -33,7 +34,7 @@ def _avatar_container(avatar_url: str | None, accent_color: Color, body: str
         container.add_text_display(body)
     return container
 
-def _formattime(td: timedelta) -> str:
+def _formattime(td: timedelta, microseconds: bool=True) -> str:
     mm, ss = divmod(td.seconds, 60)
     hh, mm = divmod(mm, 60)
     if hh:
@@ -50,7 +51,7 @@ def _formattime(td: timedelta) -> str:
             s = f'{days}, {s} second{plural(ss)}' if ss else days
         else:
             s = f'{days}, {s}'
-    if td.microseconds:
+    if td.microseconds and microseconds:
         s = f'{s}.{round(td.microseconds, -3):06d}'
         s = s.rstrip('0').rstrip('.')
     return s
@@ -67,16 +68,20 @@ def _map_color(api_map: APIMap) -> int:
                 5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                 9: 0x555555, 10: 0x000000}.get(api_map.tier or 0, 0xcccccc)
 
-def _map_info(api_map: APIMap, pro: bool | None=None) -> str:
-    if api_map.bonus is not None:
-        extra = f"""**Bonus**: {api_map.bonus}
-"""
-    elif api_map.course is not None:
-        extra = f"""**Course**: {api_map.course}
-"""
-    else:
-        extra = ''
-    extra += f"**Mode**: {api_map.mode}{' (PRO)' if pro else ''}"
+def _map_info(api_map: APIMap, pro: bool | None=None,
+              include_course: bool=True, include_mode: bool=True) -> str:
+
+    extra = ''
+    if include_course:
+        if api_map.bonus is not None:
+            extra = f'**Bonus**: {api_map.bonus}'
+        elif api_map.course is not None:
+            extra = f'**Course**: {api_map.course}'
+
+    if include_mode:
+        extra += f"""
+**Mode**: {api_map.mode}{' (PRO)' if pro else ''}"""
+
     if (pro is None and api_map.tier is not None and
         api_map.pro_tier is not None and api_map.tier != api_map.pro_tier):
         extra += f"""
@@ -238,4 +243,33 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
     gallery = MediaGalleryComponentBuilder()
     gallery.add_media_gallery_item(api_map.thumbnail_url)
     container.add_component(gallery)
+    return container
+
+def server_component(server: Server, api_map: APIMap | None
+                     ) -> ContainerComponentBuilder:
+    if api_map is not None:
+        map_name = f'[{server.full_map_name}]({api_map.url})'
+    else:
+        map_name = server.full_map_name.replace('_', r'\_')
+    port = f':{server.port}' if server.port != 27015 else ''
+    body = f"""## {server.name}
+
+**Game**: {server.game}
+**IP**: {server.host}{port}
+**Map**: {map_name}"""
+    if api_map is not None:
+        body += _map_info(api_map, include_course=False, include_mode=False)
+    body += f"""
+**Players**: {server.player_count}/{server.max_players}"""
+    for player in server.players:
+        player_time = _formattime(player.duration, microseconds=False)
+        body += f"""
+- {player.name} ({player_time})"""
+
+    container = ContainerComponentBuilder()
+    container.add_text_display(body)
+    if api_map is not None:
+        gallery = MediaGalleryComponentBuilder()
+        gallery.add_media_gallery_item(api_map.thumbnail_url)
+        container.add_component(gallery)
     return container

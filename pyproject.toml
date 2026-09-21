@@ -7,11 +7,16 @@ requires-python = ">=3.13"
 dependencies = [
     "hikari-arc[rest]>=2.3.2",
     "hikari[server,speedups]>=2.6.0",
+    "little-a2s>=0.7.3",
     "pydantic>=2.13.5",
     "tortoise-orm>=1.1.8",
     "urllib3-future[brotli,zstd]>=2.24.906",
     "uvloop>=0.22.1",
 ]
+
+[tool.uv.sources.little-a2s]
+git = "https://github.com/misscatmint/little-a2s.git"
+rev = "c4514bb19590ee7f7b88e4d3010070f41c3285f5"
 
 [tool.basedpyright]
 pythonVersion = "3.13"
