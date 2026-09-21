@@ -583,6 +583,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "hikari", extra = ["server", "speedups"] },
     { name = "hikari-arc", extra = ["rest"] },
+    { name = "little-a2s" },
     { name = "pydantic" },
     { name = "tortoise-orm" },
     { name = "urllib3-future", extra = ["brotli", "zstd"] },
@@ -593,11 +594,17 @@ dependencies = [
 requires-dist = [
     { name = "hikari", extras = ["server", "speedups"], specifier = ">=2.6.0" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.2" },
+    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=c4514bb19590ee7f7b88e4d3010070f41c3285f5" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "tortoise-orm", specifier = ">=1.1.8" },
     { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.24.906" },
     { name = "uvloop", specifier = ">=0.22.1" },
 ]
+
+[[package]]
+name = "little-a2s"
+version = "0.7.3"
+source = { git = "https://github.com/misscatmint/little-a2s.git?rev=c4514bb19590ee7f7b88e4d3010070f41c3285f5#c4514bb19590ee7f7b88e4d3010070f41c3285f5" }
 
 [[package]]
 name = "multidict"

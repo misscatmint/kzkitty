@@ -1,8 +1,9 @@
 """Bot object and command implementations"""
 
 import asyncio
+import contextlib
 import logging
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
                  IntParams, MemberParams, RESTClient, StrParams,
@@ -12,15 +13,18 @@ from arc.utils import IntervalLoop
 from hikari import GatewayBot, Intents, Member, MessageFlag, RESTBot
 from tortoise.exceptions import DoesNotExist
 
+from kzkitty.api.a2s import (Game, QueryA2SError, QueryConnectionError,
+                             init_a2s, query_server)
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
                             init_api, refresh_map_db)
 from kzkitty.api.steam import (SteamError, SteamValueError, close_steam,
                                get_steam, init_steam)
-from kzkitty.components import map_component, pb_component, profile_component
-from kzkitty.models import (Map, Mode, Player, Type, close_db,
-                            import_default_players, init_db)
+from kzkitty.components import (map_component, pb_component,
+                                profile_component, server_component)
+from kzkitty.models import (Map, Mode, Player, Server, Type, close_db,
+                            import_defaults, init_db)
 
 type _Client = Client[Any] # pyright: ignore[reportExplicitAny]
 type _Context = Context[Any] # pyright: ignore[reportExplicitAny]
@@ -29,7 +33,7 @@ _logger = logging.getLogger('kzkitty.bot')
 _tasks: set[asyncio.Task[None]] = set()
 
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
-           api_timeout: int, steam_timeout: int) -> None:
+           api_timeout: int, steam_timeout: int, a2s_timeout: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
     client.include(_slash_register)
@@ -39,6 +43,7 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.include(_slash_latest)
     client.include(_slash_map)
     client.include(_slash_profile)
+    client.include(_slash_server)
 
     # This uses minutes because the hours and days parameters are broken in arc
     refresh_db_loop = IntervalLoop(refresh_map_db, hours=refresh_db_hours,
@@ -46,8 +51,9 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     async def startup(_: _Client) -> None:
         init_api(timeout=api_timeout)
         init_steam(timeout=steam_timeout)
+        init_a2s(timeout=a2s_timeout)
         await init_db(db_url)
-        task = asyncio.create_task(import_default_players())
+        task = asyncio.create_task(import_defaults())
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
         refresh_db_loop.start()
@@ -60,22 +66,26 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.add_shutdown_hook(shutdown)
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
-        api_timeout: int=15, steam_timeout: int=5) -> None:
+        api_timeout: int=15, steam_timeout: int=2, a2s_timeout: int=2
+        ) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
-    bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
+    bot = GatewayBot( # ty: ignore[call-non-callable]
+                     discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
-    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout)
+    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout,
+           a2s_timeout)
     bot.run(check_for_updates=False)
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
             refresh_db_hours: int=24, api_timeout: int=15,
-            steam_timeout: int=5) -> None:
+            steam_timeout: int=2, a2s_timeout: int=2) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
                   suppress_optimization_warning=True)
     client = RESTClient(bot)
-    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout)
+    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout,
+           a2s_timeout)
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
@@ -91,6 +101,17 @@ async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
                      .distinct()
                      .values('name'))
     return [m['name'] for m in maps]
+
+async def _autocomplete_address(data: AutocompleteData[_Client, str]
+                                ) -> list[str]:
+    """Autocomplete server addresses for slash commands"""
+    servers = (Server.filter(server_id=data.guild_id)
+                     .order_by('-is_default', 'address')
+                     .limit(25))
+    if data.focused_value:
+        address = data.focused_value.lower()
+        servers = servers.filter(address=address)
+    return [s['address'] for s in await servers.values('address')]
 
 type _SteamProfileURLOption = Annotated[str, StrParams('Steam profile URL')]
 type _MapOption = Annotated[str,
@@ -112,6 +133,11 @@ type _TypeOption = Annotated[str,
                                        choices=[Type.PRO, Type.TP, Type.ANY])]
 type _MaybeCourseOption = Annotated[str | None, StrParams('Course')]
 type _MaybeBonusOption = Annotated[int | None, IntParams('Bonus', min=1)]
+type _MaybeAddressOption = Annotated[
+    str | None,
+    StrParams('Address', name='address',
+              autocomplete_with=_autocomplete_address)
+]
 
 class _PlayerNotFound(Exception):
     pass
@@ -319,4 +345,55 @@ async def _slash_profile(ctx: _Context, mode_name: _MaybeModeOption=None,
     api = api_for_mode(mode)
     profile = await api.get_profile(player.steamid64, mode)
     component = await profile_component(profile, player, ctx.user)
+    await ctx.respond(component=component)
+
+@slash_command('server', "Show server's current map and players",
+               autodefer=True)
+async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
+                        ) -> None:
+    """Look up a server's curent map and players"""
+    if address is None:
+        db_server = (await Server.filter(server_id=ctx.guild_id,
+                                         is_default=True)
+                                 .first())
+        if db_server is None:
+            await ctx.respond('No default server',
+                              flags=MessageFlag.EPHEMERAL)
+            return
+        address = db_server.address
+
+    parts = address.split(':', 1)
+    if len(parts) == 2:
+        host, port = parts
+    else:
+        host, port = address, ''
+    if not port:
+        port = '27015'
+    if not host or not port.isdigit():
+        await ctx.respond('Invalid address',
+                          flags=MessageFlag.EPHEMERAL)
+        return
+    try:
+        server = await query_server(host, int(port))
+    except QueryA2SError:
+        _logger.exception('a2s query failed for %s:%s', host, port)
+        await ctx.respond("Server query failed",
+                          flags=MessageFlag.EPHEMERAL)
+        return
+    except QueryConnectionError:
+        await ctx.respond("Couldn't connect to server",
+                          flags=MessageFlag.EPHEMERAL)
+        return
+    except ValueError:
+        await ctx.respond('Invalid address',
+                          flags=MessageFlag.EPHEMERAL)
+        return
+
+    api_map = None
+    mode = ({Game.CSGO: Mode.KZT, Game.CS2: Mode.CKZ}
+            .get(cast('Game', server.game)))
+    if mode is not None:
+        with contextlib.suppress(APIMapNotFoundError):
+            _, api_map = await _get_map(mode, Mode.KZT, server.map_name)
+    component = server_component(server, api_map)
     await ctx.respond(component=component)

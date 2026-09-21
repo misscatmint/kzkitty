@@ -48,6 +48,14 @@ class Player(Model):
     class Meta: # pyright: ignore # pyrefly: ignore
         unique_together = ('user_id', 'server_id')
 
+class Server(Model):
+    address = fields.CharField(max_length=255)
+    server_id = fields.IntField()
+    is_default = fields.BooleanField(default=False)
+
+    class Meta: # pyright: ignore # pyrefly: ignore
+        unique_together = ('address', 'server_id')
+
 async def init_db(db_url: str) -> None:
     await Tortoise.init(db_url=db_url, modules={'models': ['kzkitty.models']},
                         _enable_global_fallback=True)
@@ -55,7 +63,7 @@ async def init_db(db_url: str) -> None:
 
 close_db = Tortoise.close_connections
 
-async def import_default_players() -> None:
+async def _import_default_players() -> None:
     default_player_file = os.environ.get('KZKITTY_DEFAULT_PLAYERS')
     if default_player_file is None:
         return
@@ -73,8 +81,32 @@ async def import_default_players() -> None:
                                     mode=Mode(row['mode'])))
     await Player.bulk_create(users)
     if users:
-        _logger.info('Imported %d players from %s', len(users),
+        _logger.info('Imported %d player(s) from %s', len(users),
                      default_player_file)
+
+async def _import_default_servers() -> None:
+    default_server_file = os.environ.get('KZKITTY_DEFAULT_SERVERS')
+    if default_server_file is None:
+        return
+
+    servers: list[Server] = []
+    with open(default_server_file, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            address = row['address']
+            server_id = int(row['server_id'])
+            is_default = bool(int(row['is_default']))
+            if not await Server.exists(address=address, server_id=server_id):
+                servers.append(Server(address=address, server_id=server_id,
+                                      is_default=is_default))
+    await Server.bulk_create(servers)
+    if servers:
+        _logger.info('Imported %d server(s) from %s', len(servers),
+                     default_server_file)
+
+async def import_defaults() -> None:
+    await _import_default_players()
+    await _import_default_servers()
 
 async def export_default_players() -> None:
     default_player_file = os.environ['KZKITTY_DEFAULT_PLAYERS']
