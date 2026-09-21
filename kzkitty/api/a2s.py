@@ -1,3 +1,4 @@
+from aiohttp.typedefs import Query
 import asyncio
 import ipaddress
 import posixpath
@@ -9,6 +10,9 @@ from enum import StrEnum
 from little_a2s import AsyncA2S, Error as A2SError
 
 class QueryError(Exception):
+    pass
+
+class QueryInvalidAddressError(Exception):
     pass
 
 class QueryConnectionError(Exception):
@@ -52,18 +56,18 @@ async def _resolve_address(host: str, port: int) -> tuple[str, int]:
         addrinfo = await loop.getaddrinfo(host, port,
                                           type=socket.SOCK_DGRAM)
     except socket.gaierror as e:
-        raise ValueError('Invalid address') from e
+        raise QueryInvalidAddressError from e
     if not addrinfo:
-        raise ValueError('Invalid address')
+        raise QueryInvalidAddressError
     addr = addrinfo[0]
     if len(addr) != 5:
-        raise ValueError('Invalid address')
+        raise QueryInvalidAddressError
     ip_addr = addr[4][:2][0]
     if not isinstance(ip_addr, str):
-        raise ValueError('Invalid address')
+        raise QueryInvalidAddressError
     ip = ipaddress.ip_address(ip_addr)
     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-        raise ValueError('Invalid address')
+        raise QueryInvalidAddressError
     return ip_addr, port
 
 async def query_server(host: str, port: int | None, timeout: int | None=None

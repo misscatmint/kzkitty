@@ -10,11 +10,11 @@ from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
                  slash_command)
 from arc.abc.client import Client
 from arc.utils import IntervalLoop
-from hikari import GatewayBot, Intents, Member, MessageFlag, RESTBot
+from hikari import (ForbiddenError, GatewayBot, Intents, Member, MessageFlag,
+                    NotFoundError, RESTBot)
 from tortoise.exceptions import DoesNotExist
 
-from kzkitty.api.a2s import (Game, QueryA2SError, QueryConnectionError,
-                             init_a2s, query_server)
+from kzkitty.api import a2s
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
@@ -22,7 +22,8 @@ from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
 from kzkitty.api.steam import (SteamError, SteamValueError, close_steam,
                                get_steam, init_steam)
 from kzkitty.components import (map_component, pb_component,
-                                profile_component, server_component)
+                                profile_component, server_component,
+                                server_failed_component)
 from kzkitty.models import (Map, Mode, Player, Server, Type, close_db,
                             import_defaults, init_db)
 
@@ -33,7 +34,8 @@ _logger = logging.getLogger('kzkitty.bot')
 _tasks: set[asyncio.Task[None]] = set()
 
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
-           api_timeout: int, steam_timeout: int, a2s_timeout: int) -> None:
+           refresh_server_mins: int, api_timeout: int, steam_timeout: int,
+           a2s_timeout: int) -> None:
     """Register bot commands and hooks"""
     client.set_error_handler(_handle_error)
     client.include(_slash_register)
@@ -48,15 +50,19 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     # This uses minutes because the hours and days parameters are broken in arc
     refresh_db_loop = IntervalLoop(refresh_map_db, hours=refresh_db_hours,
                                    run_on_start=True)
-    async def startup(_: _Client) -> None:
+    refresh_servers_loop = IntervalLoop(refresh_servers,
+                                        minutes=refresh_server_mins,
+                                        run_on_start=True)
+    async def startup(client: _Client) -> None:
         init_api(timeout=api_timeout)
         init_steam(timeout=steam_timeout)
-        init_a2s(timeout=a2s_timeout)
+        a2s.init_a2s(timeout=a2s_timeout)
         await init_db(db_url)
         task = asyncio.create_task(import_defaults())
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
         refresh_db_loop.start()
+        refresh_servers_loop.start(client)
     client.add_startup_hook(startup)
 
     async def shutdown(_: _Client) -> None:
@@ -66,26 +72,27 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.add_shutdown_hook(shutdown)
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
-        api_timeout: int=15, steam_timeout: int=2, a2s_timeout: int=2
-        ) -> None:
+        refresh_server_mins: int=1, api_timeout: int=15, steam_timeout: int=2,
+        a2s_timeout: int=2) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
     bot = GatewayBot( # ty: ignore[call-non-callable]
                      discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
-    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout,
-           a2s_timeout)
+    _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
+           steam_timeout, a2s_timeout)
     bot.run(check_for_updates=False)
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
-            refresh_db_hours: int=24, api_timeout: int=15,
-            steam_timeout: int=2, a2s_timeout: int=2) -> None:
+            refresh_db_hours: int=24, refresh_server_mins: int=1,
+            api_timeout: int=15, steam_timeout: int=2, a2s_timeout: int=2
+            ) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
                   suppress_optimization_warning=True)
     client = RESTClient(bot)
-    _setup(client, db_url, refresh_db_hours, api_timeout, steam_timeout,
-           a2s_timeout)
+    _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
+           steam_timeout, a2s_timeout)
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
@@ -210,6 +217,15 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                 return old_api, old_api_map
 
     return api, api_map
+
+async def _get_server_map(server: a2s.Server) -> APIMap | None:
+    api_map = None
+    mode = ({a2s.Game.CSGO: Mode.KZT, a2s.Game.CS2: Mode.CKZ}
+            .get(cast('a2s.Game', server.game)))
+    if mode is not None:
+        with contextlib.suppress(APIMapNotFoundError):
+            _, api_map = await _get_map(mode, Mode.KZT, server.map_name)
+    return api_map
 
 async def _handle_error(ctx: _Context, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
@@ -347,6 +363,16 @@ async def _slash_profile(ctx: _Context, mode_name: _MaybeModeOption=None,
     component = await profile_component(profile, player, ctx.user)
     await ctx.respond(component=component)
 
+def _split_address(address: str) -> tuple[str, str]:
+    parts = address.split(':', 1)
+    if len(parts) == 2:
+        host, port = parts
+    else:
+        host, port = address, ''
+    if not port:
+        port = '27015'
+    return host, port
+
 @slash_command('server', "Show server's current map and players",
                autodefer=True)
 async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
@@ -362,38 +388,85 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
             return
         address = db_server.address
 
-    parts = address.split(':', 1)
-    if len(parts) == 2:
-        host, port = parts
-    else:
-        host, port = address, ''
-    if not port:
-        port = '27015'
+    host, port = _split_address(address)
     if not host or not port.isdigit():
         await ctx.respond('Invalid address',
                           flags=MessageFlag.EPHEMERAL)
         return
     try:
-        server = await query_server(host, int(port))
-    except QueryA2SError:
+        server = await a2s.query_server(host, int(port))
+    except a2s.QueryA2SError:
         _logger.exception('a2s query failed for %s:%s', host, port)
         await ctx.respond("Server query failed",
                           flags=MessageFlag.EPHEMERAL)
         return
-    except QueryConnectionError:
+    except a2s.QueryConnectionError:
         await ctx.respond("Couldn't connect to server",
                           flags=MessageFlag.EPHEMERAL)
         return
-    except ValueError:
+    except a2s.QueryInvalidAddressError:
         await ctx.respond('Invalid address',
                           flags=MessageFlag.EPHEMERAL)
         return
 
-    api_map = None
-    mode = ({Game.CSGO: Mode.KZT, Game.CS2: Mode.CKZ}
-            .get(cast('Game', server.game)))
-    if mode is not None:
-        with contextlib.suppress(APIMapNotFoundError):
-            _, api_map = await _get_map(mode, Mode.KZT, server.map_name)
+    api_map = await _get_server_map(server)
     component = server_component(server, api_map)
     await ctx.respond(component=component)
+
+async def _refresh_server(client: _Client, db_server: Server) -> None:
+    if db_server.channel_id is None:
+        return
+
+    message = None
+    if db_server.message_id is not None:
+        try:
+            message = await client.rest.fetch_message(db_server.channel_id,
+                                                      db_server.message_id)
+        except ForbiddenError:
+            _logger.info('server message %s in channel %s forbidden',
+                         db_server.channel_id, db_server.message_id)
+        except NotFoundError:
+            _logger.info('server message %s in channel %s not found',
+                         db_server.channel_id, db_server.message_id)
+
+    host, port = _split_address(db_server.address)
+    if host and port.isdigit():
+        try:
+            server = await a2s.query_server(host, int(port))
+        except a2s.QueryA2SError:
+            _logger.exception('a2s query failed for %s:%s', host, port)
+            component = server_failed_component(db_server.address,
+                                                'Server query failed')
+        except a2s.QueryConnectionError:
+            _logger.exception('a2s connect failed for %s:%s', host, port)
+            component = server_failed_component(db_server.address,
+                                                'Server connection failed')
+        except a2s.QueryInvalidAddressError:
+            component = server_failed_component(db_server.address,
+                                                'Invalid server address')
+        else:
+            api_map = await _get_server_map(server)
+            component = server_component(server, api_map)
+    else:
+        component = server_failed_component(db_server.address,
+                                            'Invalid server address')
+
+    if message is not None:
+        await message.edit(component=component)
+    else:
+        try:
+            message = await client.rest.create_message(
+                channel=db_server.channel_id, component=component)
+        except ForbiddenError:
+            _logger.info('creating server message in channel %s forbidden',
+                         db_server.channel_id)
+        except NotFoundError:
+            _logger.info('server message channel %s not found',
+                         db_server.channel_id)
+        else:
+            db_server.message_id = int(message.id)
+            await db_server.save(update_fields=['message_id'])
+
+async def refresh_servers(client: _Client) -> None:
+    async for db_server in Server.filter(channel_id__isnull=False):
+        await _refresh_server(client, db_server)
