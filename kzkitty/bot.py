@@ -72,8 +72,8 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.add_shutdown_hook(shutdown)
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
-        refresh_server_mins: int=1, api_timeout: int=15, steam_timeout: int=2,
-        a2s_timeout: int=2) -> None:
+        refresh_server_mins: int=1, api_timeout: int=15, steam_timeout: int=5,
+        a2s_timeout: int=5) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
     bot = GatewayBot( # ty: ignore[call-non-callable]
                      discord_token, intents=Intents.NONE, banner=None,
@@ -85,7 +85,7 @@ def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
             refresh_db_hours: int=24, refresh_server_mins: int=1,
-            api_timeout: int=15, steam_timeout: int=2, a2s_timeout: int=2
+            api_timeout: int=15, steam_timeout: int=5, a2s_timeout: int=5
             ) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
