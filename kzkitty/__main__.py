@@ -62,8 +62,8 @@ def main(args: list[str]) -> None:
     refresh_db_hours = int(os.environ.get('KZKITTY_REFRESH_DB_HOURS', 24))
     refresh_server_mins = int(os.environ.get('KZKITTY_REFRESH_SERVER_MINS',
                                              1))
-    steam_timeout = int(os.environ.get('KZKITTY_STEAM_TIMEOUT', 2))
-    a2s_timeout = int(os.environ.get('KZKITTY_A2S_TIMEOUT', 2))
+    steam_timeout = int(os.environ.get('KZKITTY_STEAM_TIMEOUT', 5))
+    a2s_timeout = int(os.environ.get('KZKITTY_A2S_TIMEOUT', 5))
     rest = os.environ.get('KZKITTY_REST')
     if rest:
         host, port = rest.split(':', 1)
