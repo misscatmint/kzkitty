@@ -1,4 +1,3 @@
-from aiohttp.typedefs import Query
 import asyncio
 import ipaddress
 import posixpath
