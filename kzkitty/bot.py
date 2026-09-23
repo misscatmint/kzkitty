@@ -387,6 +387,10 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
                               flags=MessageFlag.EPHEMERAL)
             return
         address = db_server.address
+        location: str | None = db_server.location
+    else:
+        db_server = await Server.filter(address=address).first()
+        location = db_server.location if db_server is not None else None
 
     host, port = _split_address(address)
     if not host or not port.isdigit():
@@ -408,7 +412,7 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         return
 
     api_map = await _get_server_map(server)
-    component = server_component(server, api_map)
+    component = server_component(server, api_map, location=location)
     await ctx.respond(component=component)
 
 async def _refresh_server(client: _Client, db_server: Server) -> None:
@@ -444,7 +448,8 @@ async def _refresh_server(client: _Client, db_server: Server) -> None:
                                                 'Invalid server address')
         else:
             api_map = await _get_server_map(server)
-            component = server_component(server, api_map)
+            component = server_component(server, api_map,
+                                         location=db_server.location)
     else:
         component = server_failed_component(db_server.address,
                                             'Invalid server address')

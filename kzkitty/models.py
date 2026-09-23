@@ -50,6 +50,7 @@ class Player(Model):
 
 class Server(Model):
     address = fields.CharField(max_length=255)
+    location = fields.CharField(max_length=255)
     server_id = fields.IntField()
     channel_id = fields.IntField(null=True)
     message_id = fields.IntField(null=True)
@@ -96,12 +97,14 @@ async def _import_default_servers() -> None:
         reader = csv.DictReader(csvfile)
         for row in reader:
             address = row['address']
+            location = row['location']
             server_id = int(row['server_id'])
             channel_id = int(row['channel_id']) if row['channel_id'] else None
             message_id = int(row['message_id']) if row['message_id'] else None
             is_default = bool(int(row['is_default']))
             if not await Server.exists(address=address, server_id=server_id):
-                servers.append(Server(address=address, server_id=server_id,
+                servers.append(Server(address=address, location=location,
+                                      server_id=server_id,
                                       channel_id=channel_id,
                                       message_id=message_id,
                                       is_default=is_default))
