@@ -94,7 +94,7 @@ def _map_url(name: str, mode: Mode, stage: int) -> str:
 
 def _thumbnail_url(name: str) -> str:
     return ('https://raw.githubusercontent.com/KZGlobalTeam/map-images/'
-            f'public/webp/medium/{quote(name)}.webp')
+            f'public/webp/{quote(name)}.webp')
 
 def _record_to_pb(record: _APIRecord, api_map: APIMap, place: int | None=None
                   ) -> PersonalBest:
