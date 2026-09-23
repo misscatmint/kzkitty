@@ -350,7 +350,7 @@ class CS2API(API):
 
         url = f'https://cs2kz.org/maps/{quote(name)}'
         thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
-                         'cs2kz-images/public/webp/medium/'
+                         'cs2kz-images/public/webp/full/'
                          f'{quote(name)}/{course_id}.webp')
 
         return APIMap(name=name, mode=mode, bonus=None,
