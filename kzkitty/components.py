@@ -34,8 +34,8 @@ def _avatar_container(avatar_url: str | None, accent_color: Color, body: str
         container.add_text_display(body)
     return container
 
-def _formattime(td: timedelta, microseconds: bool=True, force_minutes=False
-                ) -> str:
+def _formattime(td: timedelta, microseconds: bool=True,
+                force_minutes: bool=False) -> str:
     mm, ss = divmod(td.seconds, 60)
     hh, mm = divmod(mm, 60)
     if hh:
@@ -246,18 +246,22 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
     container.add_component(gallery)
     return container
 
-def server_component(server: a2s.Server, api_map: APIMap | None
-                     ) -> ContainerComponentBuilder:
+def server_component(server: a2s.Server, api_map: APIMap | None,
+                     location: str | None=None) -> ContainerComponentBuilder:
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
     else:
         map_name = server.full_map_name.replace('_', r'\_')
     port = f':{server.port}' if server.port != 27015 else ''
-    game = {a2s.Game.CSGO: 'CSGO', a2s.Game.CS2: 'CS2'}.get(server.game,
-                                                            server.game)
+    game = {str(a2s.Game.CSGO): 'CSGO',
+            str(a2s.Game.CS2): 'CS2'}.get(server.game, server.game)
     body = f"""## {server.name}
 
-**IP**: {server.host}{port} ({game})
+**IP**: {server.host}{port} ({game})"""
+    if location:
+        body += f"""
+**Location**: {location}"""
+    body += f"""
 **Map**: {map_name}"""
     if api_map is not None:
         body += _map_info(api_map, include_course=False, include_mode=False)
