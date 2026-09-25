@@ -101,6 +101,10 @@ def _steamid_to_steamid64(steamid: str) -> int:
 def _profile_url(steamid64: int) -> str:
     return f'https://cs2kz.org/profile/{steamid64}'
 
+def _workshop_thumbnail_url(name: str) -> str:
+    return ('https://raw.githubusercontent.com/jonahbearde/'
+            f'cs2kz-workshop-images/main/images/{name}.jpg')
+
 def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
     try:
         steamid64 = _steamid_to_steamid64(record.player.id)
@@ -359,6 +363,18 @@ class CS2API(API):
                       max_tier=10, has_tp_wrs=False, url=url,
                       impossible=tier == 10 and pro_tier == 10,
                       thumbnail_url=thumbnail_url)
+
+    @override
+    async def get_workshop_thumbnail_url(self, name: str) -> str | None:
+        url = _workshop_thumbnail_url(name)
+        try:
+            r = await self._session.request('HEAD', url)
+            if r.status == 200:
+                return url
+        except HTTPError:
+            _logger.exception('Failed to get workshop thumbnail URL for %s',
+                              name)
+        return None
 
     @override
     async def get_pb(self, steamid64: int, api_map: APIMap,

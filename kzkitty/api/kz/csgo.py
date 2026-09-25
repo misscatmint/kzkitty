@@ -457,6 +457,10 @@ class CSGOAPI(API):
                       has_tp_wrs=True, url=url, thumbnail_url=thumbnail_url)
 
     @override
+    async def get_workshop_thumbnail_url(self, name: str) -> str | None:
+        return None
+
+    @override
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
         records = await self._records_for_steamid64(steamid64, api_map.mode,
