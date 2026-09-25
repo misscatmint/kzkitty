@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import NamedTuple
+from typing import NamedTuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    from datetime import datetime, timedelta
 
 from kzkitty.models import Map, Mode, Type
 
