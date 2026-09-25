@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from datetime import timedelta
+    from datetime import datetime, timedelta
 
 from hikari import Color, User
 from hikari.impl import (ContainerComponentBuilder,
@@ -12,7 +12,7 @@ from kzkitty.api import a2s
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 if TYPE_CHECKING:
-    from kzkitty.models import Player
+    from kzkitty.models import Player, Server
 
 _logger = logging.getLogger('kzkitty.components')
 
@@ -282,13 +282,23 @@ def server_component(server: a2s.Server, api_map: APIMap | None,
         gallery = MediaGalleryComponentBuilder()
         gallery.add_media_gallery_item(api_map.thumbnail_url)
         container.add_component(gallery)
+    container.add_text_display(f'-# <t:{int(server.query_time.timestamp())}>')
     return container
 
-def server_failed_component(address: str, reason: str
-                            ) -> ContainerComponentBuilder:
-    body = f"""## {address}
+def server_unavailable_component(db_server: Server, reason: str,
+                                 query_time: datetime
+                                 ) -> ContainerComponentBuilder:
+    host, port = a2s.split_address(db_server.address)
+    port = f':{port}' if port != '27015' else ''
+    body = f"""## {db_server.name}
+**IP**: {host}{port} ({db_server.game})"""
+    if db_server.location:
+        body += f"""
+**Location**: {db_server.location}"""
+    body += f"""
+**Status**: {reason}
 
-{reason}"""
+-# <t:{int(query_time.timestamp())}>"""
     container = ContainerComponentBuilder()
     container.add_text_display(body)
     return container

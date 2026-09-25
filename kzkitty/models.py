@@ -48,8 +48,14 @@ class Player(Model):
     class Meta: # pyright: ignore # pyrefly: ignore
         unique_together = ('user_id', 'server_id')
 
+class Game(StrEnum):
+    CSGO = 'CSGO'
+    CS2 = 'CS2'
+
 class Server(Model):
+    name = fields.CharField(max_length=255)
     address = fields.CharField(max_length=255)
+    game = fields.CharEnumField(Game)
     location = fields.CharField(max_length=255)
     server_id = fields.IntField()
     channel_id = fields.IntField(null=True)
@@ -96,14 +102,17 @@ async def _import_default_servers() -> None:
     with open(default_server_file, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
+            name = row['name']
             address = row['address']
             location = row['location']
+            game = row['game']
             server_id = int(row['server_id'])
             channel_id = int(row['channel_id']) if row['channel_id'] else None
             message_id = int(row['message_id']) if row['message_id'] else None
             is_default = bool(int(row['is_default']))
             if not await Server.exists(address=address, server_id=server_id):
-                servers.append(Server(address=address, location=location,
+                servers.append(Server(name=name, address=address,
+                                      location=location, game=game,
                                       server_id=server_id,
                                       channel_id=channel_id,
                                       message_id=message_id,
