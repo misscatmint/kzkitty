@@ -3,15 +3,18 @@
 import asyncio
 import contextlib
 import logging
-from typing import Annotated, Any, cast
+from datetime import UTC, datetime
+from typing import Annotated, Any, TYPE_CHECKING, cast
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
 
 from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
                  IntParams, MemberParams, RESTClient, StrParams,
                  slash_command)
 from arc.abc.client import Client
 from arc.utils import IntervalLoop
-from hikari import (ForbiddenError, GatewayBot, Intents, Member, MessageFlag,
-                    NotFoundError, RESTBot)
+from hikari import (ForbiddenError, GatewayBot, Intents, Member, Message,
+                    MessageFlag, NotFoundError, RESTBot)
 from tortoise.exceptions import DoesNotExist
 
 from kzkitty.api import a2s
@@ -23,15 +26,22 @@ from kzkitty.api.steam import (SteamError, SteamValueError, close_steam,
                                get_steam, init_steam)
 from kzkitty.components import (map_component, pb_component,
                                 profile_component, server_component,
-                                server_failed_component)
+                                server_unavailable_component)
 from kzkitty.models import (Map, Mode, Player, Server, Type, close_db,
                             import_defaults, init_db)
 
-type _Client = Client[Any] # pyright: ignore[reportExplicitAny]
-type _Context = Context[Any] # pyright: ignore[reportExplicitAny]
+type _Client = Client[Any]
+type _Context = Context[Any]
 
 _logger = logging.getLogger('kzkitty.bot')
-_tasks: set[asyncio.Task[None]] = set()
+
+_tasks: set[asyncio.Task[Any]] = set()
+
+def _create_task[T](coro: Coroutine[Any, Any, T]) -> None:
+    """Register a task (and keep a reference to it)"""
+    task = asyncio.create_task(coro)
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
 
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            refresh_server_mins: int, api_timeout: int, steam_timeout: int,
@@ -58,9 +68,7 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
         init_steam(timeout=steam_timeout)
         a2s.init_a2s(timeout=a2s_timeout)
         await init_db(db_url)
-        task = asyncio.create_task(import_defaults())
-        _tasks.add(task)
-        task.add_done_callback(_tasks.discard)
+        _create_task(import_defaults())
         refresh_db_loop.start()
         refresh_servers_loop.start(client)
     client.add_startup_hook(startup)
@@ -363,16 +371,6 @@ async def _slash_profile(ctx: _Context, mode_name: _MaybeModeOption=None,
     component = await profile_component(profile, player, ctx.user)
     await ctx.respond(component=component)
 
-def _split_address(address: str) -> tuple[str, str]:
-    parts = address.split(':', 1)
-    if len(parts) == 2:
-        host, port = parts
-    else:
-        host, port = address, ''
-    if not port:
-        port = '27015'
-    return host, port
-
 @slash_command('server', "Show server's current map and players",
                autodefer=True)
 async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
@@ -392,7 +390,7 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         db_server = await Server.filter(address=address).first()
         location = db_server.location if db_server is not None else None
 
-    host, port = _split_address(address)
+    host, port = a2s.split_address(address)
     if not host or not port.isdigit():
         await ctx.respond('Invalid address',
                           flags=MessageFlag.EPHEMERAL)
@@ -415,11 +413,12 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
     component = server_component(server, api_map, location=location)
     await ctx.respond(component=component)
 
-async def _refresh_server(client: _Client, db_server: Server) -> None:
+async def _server_message(client: _Client, db_server: Server
+                          ) -> Message | None:
+    """Create/find a status message for a server"""
     if db_server.channel_id is None:
-        return
+        return None
 
-    message = None
     if db_server.message_id is not None:
         try:
             message = await client.rest.fetch_message(db_server.channel_id,
@@ -430,46 +429,62 @@ async def _refresh_server(client: _Client, db_server: Server) -> None:
         except NotFoundError:
             _logger.info('server message %s in channel %s not found',
                          db_server.channel_id, db_server.message_id)
+        else:
+            return message
 
-    host, port = _split_address(db_server.address)
+    component = server_unavailable_component(db_server,
+                                             'Querying server...',
+                                             datetime.now(tz=UTC))
+    try:
+        message = await client.rest.create_message(
+            channel=db_server.channel_id, component=component)
+    except ForbiddenError:
+        _logger.info('creating server message in channel %s forbidden',
+                     db_server.channel_id)
+        return None
+    except NotFoundError:
+        _logger.info('server message channel %s not found',
+                     db_server.channel_id)
+        return None
+    else:
+        db_server.message_id = int(message.id)
+        await db_server.save(update_fields=['message_id'])
+        return message
+
+async def _refresh_server(message: Message, db_server: Server) -> None:
+    """Query a server and update its status message"""
+    host, port = a2s.split_address(db_server.address)
     if host and port.isdigit():
         try:
             server = await a2s.query_server(host, int(port))
-        except a2s.QueryA2SError:
+        except a2s.QueryA2SError as e:
             _logger.exception('a2s query failed for %s:%s', host, port)
-            component = server_failed_component(db_server.address,
-                                                'Server query failed')
-        except a2s.QueryTimeoutError:
+            component = server_unavailable_component(db_server,
+                                                     'Server query failed',
+                                                     e.query_time)
+        except a2s.QueryTimeoutError as e:
             _logger.exception('a2s query timed out for %s:%s', host, port)
-            component = server_failed_component(db_server.address,
-                                                'Server query timed out')
-        except a2s.QueryInvalidAddressError:
-            component = server_failed_component(db_server.address,
-                                                'Invalid server address')
+            component = server_unavailable_component(db_server,
+                                                     'Server query timed out',
+                                                     e.query_time)
+        except a2s.QueryInvalidAddressError as e:
+            component = server_unavailable_component(db_server,
+                                                     'Invalid server address',
+                                                     e.query_time)
         else:
             api_map = await _get_server_map(server)
             component = server_component(server, api_map,
                                          location=db_server.location)
     else:
-        component = server_failed_component(db_server.address,
-                                            'Invalid server address')
+        component = server_unavailable_component(db_server,
+                                                 'Invalid server address',
+                                                 datetime.now(tz=UTC))
 
-    if message is not None:
-        await message.edit(component=component)
-    else:
-        try:
-            message = await client.rest.create_message(
-                channel=db_server.channel_id, component=component)
-        except ForbiddenError:
-            _logger.info('creating server message in channel %s forbidden',
-                         db_server.channel_id)
-        except NotFoundError:
-            _logger.info('server message channel %s not found',
-                         db_server.channel_id)
-        else:
-            db_server.message_id = int(message.id)
-            await db_server.save(update_fields=['message_id'])
+    await message.edit(component=component)
 
 async def refresh_servers(client: _Client) -> None:
+    """Update all server status messages"""
     async for db_server in Server.filter(channel_id__isnull=False):
-        await _refresh_server(client, db_server)
+        message = await _server_message(client, db_server)
+        if message is not None:
+            _create_task(_refresh_server(message, db_server))
