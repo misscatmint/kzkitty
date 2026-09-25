@@ -1,5 +1,7 @@
 import logging
-from datetime import timedelta
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from datetime import timedelta
 
 from hikari import Color, User
 from hikari.impl import (ContainerComponentBuilder,
@@ -9,7 +11,8 @@ from hikari.impl import (ContainerComponentBuilder,
 from kzkitty.api import a2s
 from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
-from kzkitty.models import Player
+if TYPE_CHECKING:
+    from kzkitty.models import Player
 
 _logger = logging.getLogger('kzkitty.components')
 

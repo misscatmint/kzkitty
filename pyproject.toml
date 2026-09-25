@@ -3,7 +3,7 @@ name = "kzkitty"
 version = "0.1.0"
 description = "Discord bot for the CS:GO and CS2 KZ global APIs."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "hikari-arc[rest]>=2.3.2",
     "hikari[server,speedups]>=2.6.0",
@@ -19,7 +19,7 @@ git = "https://github.com/misscatmint/little-a2s.git"
 rev = "c4514bb19590ee7f7b88e4d3010070f41c3285f5"
 
 [tool.basedpyright]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 reportImplicitStringConcatenation = false
 reportUnusedCallResult = false
 typeCheckingMode = "strict"
@@ -27,7 +27,7 @@ typeCheckingMode = "strict"
 [tool.mypy]
 native_parser = true
 python_executable = ".venv/bin/python"
-python_version = "3.13"
+python_version = "3.14"
 strict = true
 
 [tool.ruff]
@@ -51,7 +51,7 @@ preview = true
 
 [tool.pyrefly]
 preset = "strict"
-python-version = "3.13"
+python-version = "3.14"
 
 [tool.ty.rules]
 division-by-zero = "warn"
