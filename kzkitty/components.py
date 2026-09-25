@@ -9,7 +9,7 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
 from kzkitty.api import a2s
-from kzkitty.api.kz import APIMap, PersonalBest, Profile, Rank
+from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 if TYPE_CHECKING:
     from kzkitty.models import Player, Server
@@ -249,8 +249,9 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
     container.add_component(gallery)
     return container
 
-def server_component(server: a2s.Server, api_map: APIMap | None,
-                     location: str | None=None) -> ContainerComponentBuilder:
+async def server_component(server: a2s.Server, api: API | None,
+                           api_map: APIMap | None, location: str | None=None
+                           ) -> ContainerComponentBuilder:
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
     else:
@@ -276,11 +277,17 @@ def server_component(server: a2s.Server, api_map: APIMap | None,
         body += f"""
 - {player.name} ({player_time})"""
 
+    thumbnail_url = None
+    if api_map is not None:
+        thumbnail_url = api_map.thumbnail_url
+    elif api is not None:
+        thumbnail_url = await api.get_workshop_thumbnail_url(server.map_name)
+
     container = ContainerComponentBuilder()
     container.add_text_display(body)
-    if api_map is not None:
+    if thumbnail_url is not None:
         gallery = MediaGalleryComponentBuilder()
-        gallery.add_media_gallery_item(api_map.thumbnail_url)
+        gallery.add_media_gallery_item(thumbnail_url)
         container.add_component(gallery)
     container.add_text_display(f'-# <t:{int(server.query_time.timestamp())}>')
     return container

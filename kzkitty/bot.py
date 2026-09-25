@@ -226,14 +226,17 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
 
     return api, api_map
 
-async def _get_server_map(server: a2s.Server) -> APIMap | None:
-    api_map = None
+async def _get_server_map(server: a2s.Server) -> tuple[API | None,
+                                                       APIMap | None]:
+    api = api_map = None
     mode = ({a2s.Game.CSGO: Mode.KZT, a2s.Game.CS2: Mode.CKZ}
             .get(cast('a2s.Game', server.game)))
     if mode is not None:
         with contextlib.suppress(APIMapNotFoundError):
-            _, api_map = await _get_map(mode, Mode.KZT, server.map_name)
-    return api_map
+            api, api_map = await _get_map(mode, Mode.KZT, server.map_name)
+        if api is None:
+            api = api_for_mode(mode)
+    return api, api_map
 
 async def _handle_error(ctx: _Context, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
@@ -409,8 +412,9 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         await ctx.respond('Invalid address', flags=MessageFlag.EPHEMERAL)
         return
 
-    api_map = await _get_server_map(server)
-    component = server_component(server, api_map, location=location)
+    api, api_map = await _get_server_map(server)
+    component = await server_component(server, api, api_map,
+                                       location=location)
     await ctx.respond(component=component)
 
 async def _server_message(client: _Client, db_server: Server
@@ -472,9 +476,9 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
                                                      'Invalid server address',
                                                      e.query_time)
         else:
-            api_map = await _get_server_map(server)
-            component = server_component(server, api_map,
-                                         location=db_server.location)
+            api, api_map = await _get_server_map(server)
+            component = await server_component(server, api, api_map,
+                                               location=db_server.location)
     else:
         component = server_unavailable_component(db_server,
                                                  'Invalid server address',

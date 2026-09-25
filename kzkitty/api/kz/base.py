@@ -117,6 +117,10 @@ class API(ABC):
         ...
 
     @abstractmethod
+    async def get_workshop_thumbnail_url(self, name: str) -> str | None:
+        ...
+
+    @abstractmethod
     async def get_pb(self, steamid64: int, api_map: APIMap,
                      tp_type: Type=Type.ANY) -> PersonalBest | None:
         ...
