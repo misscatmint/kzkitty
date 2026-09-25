@@ -3,16 +3,13 @@ import ipaddress
 import posixpath
 import socket
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from enum import StrEnum
 
 from little_a2s import AsyncA2S, Error as A2SError
 
 class QueryError(Exception):
-    def __init__(self, /, msg: str | None=None, *, query_time: datetime
-                 ) -> None:
-        super().__init__(*[msg] if msg is not None else [])
-        self.query_time: datetime = query_time
+    pass
 
 class QueryInvalidAddressError(QueryError):
     pass
@@ -44,7 +41,6 @@ class Server:
     player_count: int
     max_players: int
     players: list[Player]
-    query_time: datetime
 
 _timeout: int | None = None
 
@@ -53,25 +49,24 @@ def init_a2s(timeout: int | None=None) -> None:
     if _timeout is None:
         _timeout = timeout
 
-async def _resolve_address(host: str, port: int, query_time: datetime
-                           ) -> tuple[str, int]:
+async def _resolve_address(host: str, port: int) -> tuple[str, int]:
     loop = asyncio.get_running_loop()
     try:
         addrinfo = await loop.getaddrinfo(host, port,
                                           type=socket.SOCK_DGRAM)
     except socket.gaierror as e:
-        raise QueryInvalidAddressError(query_time=query_time) from e
+        raise QueryInvalidAddressError from e
     if not addrinfo:
-        raise QueryInvalidAddressError(query_time=query_time)
+        raise QueryInvalidAddressError
     addr = addrinfo[0]
     if len(addr) != 5:
-        raise QueryInvalidAddressError(query_time=query_time)
+        raise QueryInvalidAddressError
     ip_addr = addr[4][:2][0]
     if not isinstance(ip_addr, str):
-        raise QueryInvalidAddressError(query_time=query_time)
+        raise QueryInvalidAddressError
     ip = ipaddress.ip_address(ip_addr)
     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-        raise QueryInvalidAddressError(query_time=query_time)
+        raise QueryInvalidAddressError
     return ip_addr, port
 
 def split_address(address: str) -> tuple[str, str]:
@@ -89,18 +84,17 @@ async def query_server(host: str, port: int | None, timeout: int | None=None
     port = port if port is not None else 27015
     timeout = timeout if timeout is not None else _timeout
 
-    query_time = datetime.now(tz=UTC)
     try:
         async with asyncio.timeout(timeout):
-            ip, port = await _resolve_address(host, port, query_time)
+            ip, port = await _resolve_address(host, port)
             a2s = AsyncA2S.from_addr(host, port)
             async with a2s:
                 info = await a2s.info()
                 player_info = await a2s.players()
     except A2SError as e:
-        raise QueryA2SError(query_time=query_time) from e
+        raise QueryA2SError from e
     except TimeoutError as e:
-        raise QueryTimeoutError(query_time=query_time) from e
+        raise QueryTimeoutError from e
 
     players = [Player(p.name, duration=timedelta(seconds=p.duration))
                for p in player_info.players]
@@ -108,4 +102,4 @@ async def query_server(host: str, port: int | None, timeout: int | None=None
                   full_map_name=info.map,
                   map_name=posixpath.basename(info.map),
                   player_count=info.players, max_players=info.max_players,
-                  players=players, query_time=query_time)
+                  players=players)

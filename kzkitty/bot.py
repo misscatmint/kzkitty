@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, datetime
 from typing import Annotated, Any, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -437,8 +436,7 @@ async def _server_message(client: _Client, db_server: Server
             return message
 
     component = server_unavailable_component(db_server,
-                                             'Querying server...',
-                                             datetime.now(tz=UTC))
+                                             'Querying server...')
     try:
         message = await client.rest.create_message(
             channel=db_server.channel_id, component=component)
@@ -464,25 +462,21 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
         except a2s.QueryA2SError as e:
             _logger.exception('a2s query failed for %s:%s', host, port)
             component = server_unavailable_component(db_server,
-                                                     'Server query failed',
-                                                     e.query_time)
+                                                     'Server query failed')
         except a2s.QueryTimeoutError as e:
             _logger.exception('a2s query timed out for %s:%s', host, port)
             component = server_unavailable_component(db_server,
-                                                     'Server query timed out',
-                                                     e.query_time)
+                                                     'Server query timed out')
         except a2s.QueryInvalidAddressError as e:
             component = server_unavailable_component(db_server,
-                                                     'Invalid server address',
-                                                     e.query_time)
+                                                     'Invalid server address')
         else:
             api, api_map = await _get_server_map(server)
             component = await server_component(server, api, api_map,
                                                location=db_server.location)
     else:
         component = server_unavailable_component(db_server,
-                                                 'Invalid server address',
-                                                 datetime.now(tz=UTC))
+                                                 'Invalid server address')
 
     await message.edit(component=component)
 

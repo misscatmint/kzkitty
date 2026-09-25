@@ -1,7 +1,8 @@
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
 from hikari import Color, User
 from hikari.impl import (ContainerComponentBuilder,
@@ -252,6 +253,7 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
 async def server_component(server: a2s.Server, api: API | None,
                            api_map: APIMap | None, location: str | None=None
                            ) -> ContainerComponentBuilder:
+    result_time = datetime.now(tz=UTC)
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
     else:
@@ -289,12 +291,12 @@ async def server_component(server: a2s.Server, api: API | None,
         gallery = MediaGalleryComponentBuilder()
         gallery.add_media_gallery_item(thumbnail_url)
         container.add_component(gallery)
-    container.add_text_display(f'-# <t:{int(server.query_time.timestamp())}>')
+    container.add_text_display(f'-# <t:{int(result_time.timestamp())}>')
     return container
 
-def server_unavailable_component(db_server: Server, reason: str,
-                                 query_time: datetime
+def server_unavailable_component(db_server: Server, reason: str
                                  ) -> ContainerComponentBuilder:
+    result_time = datetime.now(tz=UTC)
     host, port = a2s.split_address(db_server.address)
     port = f':{port}' if port != '27015' else ''
     body = f"""## {db_server.name}
@@ -305,7 +307,7 @@ def server_unavailable_component(db_server: Server, reason: str,
     body += f"""
 **Status**: {reason}
 
--# <t:{int(query_time.timestamp())}>"""
+-# <t:{int(result_time.timestamp())}>"""
     container = ContainerComponentBuilder()
     container.add_text_display(body)
     return container
