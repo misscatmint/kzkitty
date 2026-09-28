@@ -31,7 +31,7 @@ async def close_api() -> None:
         _csgo_api = None
     if _cs2_api is not None:
         await _cs2_api.close()
-        _csw_api = None
+        _cs2_api = None
 
 def api_for_mode(mode: Mode) -> API:
     if _csgo_api is None or _cs2_api is None:
