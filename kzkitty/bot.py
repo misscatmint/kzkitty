@@ -56,7 +56,6 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.include(_slash_profile)
     client.include(_slash_server)
 
-    # This uses minutes because the hours and days parameters are broken in arc
     refresh_db_loop = IntervalLoop(refresh_map_db, hours=refresh_db_hours,
                                    run_on_start=True)
     refresh_servers_loop = IntervalLoop(refresh_servers,
