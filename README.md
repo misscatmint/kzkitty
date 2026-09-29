@@ -9,7 +9,9 @@ Available commands:
 - `/profile` - show current rank, points, point average
 - `/map` - show map info and world record times
 - `/register` - register a steam profile url and default mode with the bot
+- `/unregister` - unregister your steam profile
 - `/mode` - change the default mode to use for commands
+- `/server` - show server status (the map, who's playing, etc.)
 
 <img alt="screenshot of /pb, /map, /profile" src="screenshot.png" width="672">
 
@@ -30,7 +32,7 @@ Then, to run locally:
 KZKITTY_DB=sqlite://kzkitty.db KZKITTY_DISCORD_TOKEN=... uv run -m kzkitty
 ```
 
-Optionally set the `KZKITTY_INITIAL_PLAYERS` environment variable to point to
+Optionally set the `KZKITTY_DEFAULT_PLAYERS` environment variable to point to
 a CSV file in the following format:
 
 ```csv
@@ -41,11 +43,26 @@ user_id,server_id,steamid64,mode
 This will prepopulate the database with Discord users mapped to Steam IDs and
 preferred KZ game modes (on a per-Discord server basis).
 
+Similarly, set `KZKITTY_DEFAULT_SERVERS` to a CSV file in the following
+format:
+
+```csv
+name,address,game,location,server_id,channel_id,message_id,is_default
+...
+```
+
+Setting `channel_id` and `message_id` will make the bot generate auto-updating
+server status messages. `is_default` controls what server `/server` uses by
+default.
+
 `KZKITTY_REFRESH_DB_HOURS` can optionally be used to control how frequently
 the map cache is updated from the global APIs. The default is 24 hours.
 
-To control HTTP timeouts, set `KZKITTY_API_TIMEOUT` and
-`KZKITTY_STEAM_TIMEOUT` (in seconds). They default to 15 and 5 seconds
+`KZKITTY_REFRESH_SERVER_MINS` controls how often the bot queries default
+servers to update their Discord messages.
+
+To control timeouts, set `KZKITTY_API_TIMEOUT`, and `KZKITTY_STEAM_TIMEOUT`,
+and `KZKITTY_A2S_TIMEOUT` (in seconds). They default to 15, 5, and 5 seconds
 respectively.
 
 Set `KZKITTY_REST` to an `address:port` to run the bot as a REST bot. Note
@@ -67,6 +84,7 @@ services:
     environment:
       - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
       - KZKITTY_DEFAULT_PLAYERS=/etc/kzkitty/players.csv
+      - KZKITTY_DEFAULT_SERVERS=/etc/kzkitty/servers.csv
       - KZKITTY_DISCORD_TOKEN=...
       - TZ=America/Chicago
     volumes:
