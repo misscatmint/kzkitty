@@ -347,7 +347,7 @@ class CSGOAPI(API):
     @override
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
                       bonus: int | None=None) -> APIMap:
-        if not re.fullmatch(r'[A-za-z0-9_]+', name):
+        if not re.fullmatch(r'[A-Za-z0-9_]+', name):
             raise APIMapError('Invalid map name')
 
         db_map = None
