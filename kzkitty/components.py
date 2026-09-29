@@ -94,8 +94,8 @@ def _map_info(api_map: APIMap, pro: bool | None=None,
 **Tier** (PRO): {api_map.pro_tier} - {api_map.pro_tier_name}"""
     else:
         if pro and api_map.pro_tier is not None:
-            tier = api_map.pro_tier
-            tier_name = api_map.pro_tier_name
+            tier: int | None = api_map.pro_tier
+            tier_name: str | None = api_map.pro_tier_name
         else:
             tier = api_map.tier
             tier_name = api_map.tier_name
