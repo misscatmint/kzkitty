@@ -15,6 +15,7 @@ from arc.utils import IntervalLoop
 from hikari import (ForbiddenError, GatewayBot, Intents, Member, Message,
                     MessageFlag, NotFoundError, RESTBot)
 from tortoise.exceptions import DoesNotExist
+from tortoise.expressions import Q
 
 from kzkitty.api import a2s
 from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
@@ -27,7 +28,7 @@ from kzkitty.api.steam import (SteamError, SteamProfileNotFound,
 from kzkitty.components import (map_component, pb_component,
                                 profile_component, server_component,
                                 server_unavailable_component)
-from kzkitty.models import (Map, Mode, Player, Server, Type, close_db,
+from kzkitty.models import (Course, Map, Mode, Player, Server, Type, close_db,
                             import_defaults, init_db)
 
 type _Client = Client[Any]
@@ -109,12 +110,37 @@ async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
     name = data.focused_value.lower()
     if len(name) < 3 or name in {'kz_', 'bkz', 'bkz_'}:
         return []
-    maps = (await Map.filter(name__contains=name)
+    maps = (await Map.filter(name__icontains=name)
                      .order_by('name')
-                     .limit(25)
                      .distinct()
+                     .limit(25)
                      .values('name'))
     return [m['name'] for m in maps]
+
+async def _autocomplete_course(data: AutocompleteData[_Client, str]
+                               ) -> list[str]:
+    options = [o for o in data.options
+               if o.name == 'map' and isinstance(o.value, str)]
+    if not options:
+        return []
+    map_name = str(options[0].value).lower()
+    if not map_name:
+        return []
+    # This might be better as a foreign key at some point, but this works for
+    # now.
+    db_map = await Map.get_or_none(name=map_name, is_cs2=True)
+    if db_map is None:
+        return []
+    course_filter = Q(map_id=db_map.map_id)
+    if data.focused_value:
+        name = data.focused_value.lower()
+        course_filter &= Q(name__icontains=name)
+    courses = (await Course.filter(course_filter)
+                           .order_by('name')
+                           .distinct()
+                           .limit(25)
+                           .values('name'))
+    return [c['name'] for c in courses]
 
 async def _autocomplete_address(data: AutocompleteData[_Client, str]
                                 ) -> list[str]:
@@ -145,7 +171,10 @@ type _MaybePlayerOption = Annotated[Member | None,
 type _TypeOption = Annotated[str,
                              StrParams('Pro or teleport run', name='type',
                                        choices=[Type.PRO, Type.TP, Type.ANY])]
-type _MaybeCourseOption = Annotated[str | None, StrParams('Course')]
+type _MaybeCourseOption = Annotated[
+    str | None,
+    StrParams('Course', autocomplete_with=_autocomplete_course)
+]
 type _MaybeBonusOption = Annotated[int | None, IntParams('Bonus', min=1)]
 type _MaybeAddressOption = Annotated[
     str | None,
