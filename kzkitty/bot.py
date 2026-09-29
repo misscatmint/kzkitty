@@ -383,6 +383,7 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
     if address is None:
         db_server = (await Server.filter(server_id=ctx.guild_id,
                                          is_default=True)
+                                 .order_by('id')
                                  .first())
         if db_server is None:
             await ctx.respond('No default server',
