@@ -7,6 +7,9 @@ from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
 class SteamError(Exception):
     pass
 
+class SteamProfileNotFound(SteamError):
+    pass
+
 class SteamUnitializedError(SteamError):
     pass
 
@@ -44,12 +47,20 @@ class Steam:
             raise SteamError("Couldn't parse Steam profile XML") from e
 
     async def steamid64_for_profile(self, url: str) -> int:
-        u = urlsplit(url)
+        u = urlsplit(url, scheme='https')
         if u.netloc != 'steamcommunity.com':
             raise SteamValueError
 
         url = f'https://steamcommunity.com{u.path}?xml=1'
         xml = await self._get_profile(url)
+        error = xml.find('error')
+        if error is not None:
+            if error.text is None:
+                raise SteamError("Couldn't get Steam profile (unspecified "
+                                 "error)")
+            elif 'profile could not be found' in error.text:
+                raise SteamProfileNotFound(error.text)
+            raise SteamError(error.text)
         steamid64 = xml.find('steamID64')
         if steamid64 is None or steamid64.text is None:
             raise SteamError('Malformed Steam profile XML (no steamid64)')
