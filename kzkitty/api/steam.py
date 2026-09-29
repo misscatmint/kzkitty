@@ -1,6 +1,8 @@
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 from xml.etree import ElementTree
+
+from urllib3.exceptions import LocationParseError
+from urllib3.util import parse_url
 
 from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
 
@@ -47,9 +49,13 @@ class Steam:
             raise SteamError("Couldn't parse Steam profile XML") from e
 
     async def steamid64_for_profile(self, url: str) -> int:
-        u = urlsplit(url if '://' in url else f'https://{url}',
-                     scheme='https')
-        if u.netloc != 'steamcommunity.com':
+        try:
+            u = parse_url(url)
+        except LocationParseError as e:
+            raise SteamValueError from e
+        if u.host != 'steamcommunity.com':
+            raise SteamValueError
+        if u.path is None or not u.path.startswith(('/id/', '/profiles/')):
             raise SteamValueError
 
         url = f'https://steamcommunity.com{u.path}?xml=1'
