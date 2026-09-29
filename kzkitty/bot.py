@@ -458,15 +458,15 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
     if host and port.isdigit():
         try:
             server = await a2s.query_server(host, int(port))
-        except a2s.QueryA2SError as e:
+        except a2s.QueryA2SError:
             _logger.exception('a2s query failed for %s:%s', host, port)
             component = server_unavailable_component(db_server,
                                                      'Server query failed')
-        except a2s.QueryTimeoutError as e:
+        except a2s.QueryTimeoutError:
             _logger.exception('a2s query timed out for %s:%s', host, port)
             component = server_unavailable_component(db_server,
                                                      'Server query timed out')
-        except a2s.QueryInvalidAddressError as e:
+        except a2s.QueryInvalidAddressError:
             component = server_unavailable_component(db_server,
                                                      'Invalid server address')
         else:
