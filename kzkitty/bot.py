@@ -21,8 +21,9 @@ from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
                             init_api, refresh_map_db)
-from kzkitty.api.steam import (SteamError, SteamValueError, close_steam,
-                               get_steam, init_steam)
+from kzkitty.api.steam import (SteamError, SteamProfileNotFound,
+                               SteamValueError, close_steam, get_steam,
+                               init_steam)
 from kzkitty.components import (map_component, pb_component,
                                 profile_component, server_component,
                                 server_unavailable_component)
@@ -256,6 +257,14 @@ async def _handle_error(ctx: _Context, exc: Exception) -> None:
     elif isinstance(exc, APIMapError):
         await ctx.respond(str(exc), flags=MessageFlag.EPHEMERAL)
         return
+    elif isinstance(exc, SteamProfileNotFound):
+        await ctx.respond('Steam profile not found',
+                          flags=MessageFlag.EPHEMERAL)
+        return
+    elif isinstance(exc, SteamValueError):
+        await ctx.respond('Invalid Steam profile URL',
+                          flags=MessageFlag.EPHEMERAL)
+        return
     elif isinstance(exc, SteamError):
         await ctx.respond("Couldn't access Steam API",
                           flags=MessageFlag.EPHEMERAL)
@@ -270,13 +279,7 @@ async def _slash_register(ctx: _Context, profile: _SteamProfileURLOption,
                           mode_name: _ModeOption=Mode.KZT) -> None:
     """Register the user with a given Steam profile and game mode"""
     steam = get_steam()
-    try:
-        steamid64 = await steam.steamid64_for_profile(profile)
-    except SteamValueError:
-        await ctx.respond('Invalid Steam profile URL',
-                          flags=MessageFlag.EPHEMERAL)
-        return
-
+    steamid64 = await steam.steamid64_for_profile(profile)
     defaults: dict[str, int | Mode] = {'steamid64': steamid64}
     defaults['mode'] = Mode(mode_name)
     await Player.update_or_create( # pyright: ignore[reportUnknownMemberType]
