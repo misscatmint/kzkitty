@@ -40,9 +40,9 @@ class Course(Model):
     vnl_pro_tier = fields.IntField(null=True)
 
 class Player(Model):
-    user_id = fields.IntField()
-    server_id = fields.IntField()
-    steamid64 = fields.IntField()
+    user_id = fields.BigIntField()
+    server_id = fields.BigIntField()
+    steamid64 = fields.BigIntField()
     mode = fields.CharEnumField(Mode, default=Mode.KZT)
 
     class Meta: # pyright: ignore # pyrefly: ignore
@@ -57,9 +57,9 @@ class Server(Model):
     address = fields.CharField(max_length=255)
     game = fields.CharEnumField(Game)
     location = fields.CharField(max_length=255)
-    server_id = fields.IntField()
-    channel_id = fields.IntField(null=True)
-    message_id = fields.IntField(null=True)
+    server_id = fields.BigIntField()
+    channel_id = fields.BigIntField(null=True)
+    message_id = fields.BigIntField(null=True)
     is_default = fields.BooleanField(default=False)
 
     class Meta: # pyright: ignore # pyrefly: ignore
