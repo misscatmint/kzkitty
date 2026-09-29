@@ -440,21 +440,19 @@ class CS2API(API):
         rating = {Mode.CKZ: profile.ckz_rating,
                   Mode.VNL2: profile.vnl_rating}[mode]
         points = rating / 10.0
-        if not points:
-            rank = Rank.NEW
-        else:
-            thresholds = [(37500.0, Rank.LEGEND),
-                          (35000.0, Rank.MASTER),
-                          (30000.0, Rank.PRO),
-                          (25000.0, Rank.SEMIPRO),
-                          (20000.0, Rank.EXPERT),
-                          (15000.0, Rank.SKILLED),
-                          (10000.0, Rank.REGULAR),
-                          (5000.0, Rank.CASUAL),
-                          (0.0, Rank.BEGINNER)]
-            rank = Rank.BEGINNER
-            for threshold, rank in thresholds:
-                if points >= threshold:
-                    break
+        thresholds = [(37500.0, Rank.LEGEND),
+                      (35000.0, Rank.MASTER),
+                      (30000.0, Rank.PRO),
+                      (25000.0, Rank.SEMIPRO),
+                      (20000.0, Rank.EXPERT),
+                      (15000.0, Rank.SKILLED),
+                      (10000.0, Rank.REGULAR),
+                      (5000.0, Rank.CASUAL),
+                      (0.0, Rank.BEGINNER)]
+        player_rank = Rank.NEW
+        for threshold, rank in thresholds:
+            if points >= threshold:
+                player_rank = rank
+                break
         return Profile(name=profile.name, url=player_url, mode=mode,
-                       rank=rank, points=int(points), average=None)
+                       rank=player_rank, points=int(points), average=None)

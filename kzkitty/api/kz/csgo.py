@@ -601,10 +601,11 @@ class CSGOAPI(API):
                        (1000, Rank.BEGINNER_PLUS),
                        (500, Rank.BEGINNER),
                        (1, Rank.BEGINNER_MINUS)]
-        rank = Rank.NEW
+        player_rank = Rank.NEW
         for threshold, rank in thresholds:
             if api_rank.points >= threshold:
+                player_rank = rank
                 break
         return Profile(name=api_rank.player_name, url=player_url,
-                       mode=mode, rank=rank, points=api_rank.points,
+                       mode=mode, rank=player_rank, points=api_rank.points,
                        average=int(api_rank.average))
