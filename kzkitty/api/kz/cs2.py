@@ -297,10 +297,15 @@ class CS2API(API):
                                                  map_id=db_map.map_id)
                                          .first())
             else:
-                db_course = (await Course.filter(name__icontains=course,
+                db_course = (await Course.filter(name__iexact=course,
                                                  map_id=db_map.map_id)
                                          .order_by('course_id')
                                          .first())
+                if db_course is None:
+                    db_course = (await Course.filter(name__icontains=course,
+                                                     map_id=db_map.map_id)
+                                             .order_by('course_id')
+                                             .first())
             if db_course is not None:
                 course_id = db_course.course_id
                 course_name = db_course.name
@@ -341,10 +346,15 @@ class CS2API(API):
                 course = course.lower()
                 for course_id, course_info in enumerate(courses, start=1):
                     course_name = course_info.name
-                    if course in course_name.lower():
+                    if course_name.lower() == course:
                         break
                 else:
-                    raise APIMapError('Map course not found')
+                    for course_id, course_info in enumerate(courses, start=1):
+                        course_name = course_info.name
+                        if course in course_name.lower():
+                            break
+                    else:
+                        raise APIMapError('Map course not found')
 
             course_filters = course_info.filters
             course_filter = {Mode.CKZ: course_filters.classic,
