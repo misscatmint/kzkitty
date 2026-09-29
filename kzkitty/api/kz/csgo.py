@@ -11,8 +11,8 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
 
 from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
-from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
-                                 APIMapAmbiguousError, APIMapError,
+from kzkitty.api.kz.base import (API, APIDataError, APIError, APIHTTPError,
+                                 APIMap, APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank,
                                  RefreshMapDBResult, PersonalBest, Profile)
 from kzkitty.models import Map, Mode, Type
@@ -122,15 +122,16 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API SKZ record filters "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API SKZ record filters "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIError("Couldn't get global API SKZ record filters") from e
+            raise APIHTTPError("Couldn't get global API SKZ record "
+                               'filters') from e
         try:
             filters = _APIMapRecordFilterList.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API map record filters') from e
+            raise APIDataError('Malformed global API map record filters') from e
         skz_maps = {f.map_id for f in filters}
         return {m.id: m.id in skz_maps for m in api_maps}
 
@@ -141,15 +142,15 @@ class CSGOAPI(API):
             if r.status == 404:
                 return 10, 10
             elif r.status != 200:
-                raise APIError("Couldn't get VNL map tiers "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get VNL map tiers "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get VNL map tiers") from e
+            raise APIHTTPError("Couldn't get VNL map tiers") from e
         try:
             vnl_map = _VNLMap.model_validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed VNL API map') from e
+            raise APIDataError('Malformed VNL API map') from e
         return vnl_map.tp_tier, vnl_map.pro_tier
 
     async def _vnl_tiers(self) -> dict[int, tuple[int, int]]:
@@ -157,15 +158,15 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get VNL API maps "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get VNL API maps "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIError("Couldn't get VNL API maps") from e
+            raise APIHTTPError("Couldn't get VNL API maps") from e
         try:
             vnl_maps = _VNLMapList.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed VNL API maps') from e
+            raise APIDataError('Malformed VNL API maps') from e
         return {m.id: (m.tp_tier, m.pro_tier) for m in vnl_maps}
 
     @override
@@ -174,16 +175,16 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API maps "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API maps "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIError("Couldn't get global API maps") from e
+            raise APIHTTPError("Couldn't get global API maps") from e
 
         try:
             api_maps = _APIMapList.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API maps') from e
+            raise APIDataError('Malformed global API maps') from e
 
         skz_filters: dict[int, bool] = {}
         try:
@@ -289,16 +290,16 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API PBs "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API PBs "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get global API PBs") from e
+            raise APIHTTPError("Couldn't get global API PBs") from e
 
         try:
             return _APIRecordList.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API PBs') from e
+            raise APIDataError('Malformed global API PBs') from e
 
     async def _record_for_map(self, api_map: APIMap, tp_type: Type,
                               stage: int | None=None) -> _APIRecord | None:
@@ -318,15 +319,15 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API WR "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API WR "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get global API WR") from e
+            raise APIHTTPError("Couldn't get global API WR") from e
         try:
             records = _APIRecordList.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API PBs') from e
+            raise APIDataError('Malformed global API PBs') from e
         return records[0] if records else None
 
     async def _place_for_pb(self, pb: PersonalBest) -> int:
@@ -334,15 +335,15 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API PB place "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API PB place "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get global API PB place") from e
+            raise APIHTTPError("Couldn't get global API PB place") from e
         try:
             return _APIPlace.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API place') from e
+            raise APIDataError('Malformed global API place') from e
 
     @override
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
@@ -373,16 +374,16 @@ class CSGOAPI(API):
             try:
                 r = await self._session.request('GET', url)
                 if r.status != 200:
-                    raise APIError("Couldn't get global API map "
-                                   f'(HTTP {r.status})')
+                    raise APIHTTPError("Couldn't get global API map "
+                                       f'(HTTP {r.status})')
                 json = await r.data
             except HTTPError as e:
-                raise APIConnectionError("Couldn't get global API map") from e
+                raise APIHTTPError("Couldn't get global API map") from e
 
             try:
                 api_map = _APIMapResult.validate_json(json)
             except ValidationError as e:
-                raise APIError('Malformed global API map') from e
+                raise APIDataError('Malformed global API map') from e
             if api_map is None:
                 raise APIMapNotFoundError('Map not found')
             name = api_map.name
@@ -395,10 +396,10 @@ class CSGOAPI(API):
             try:
                 r = await self._session.request('GET', url)
                 if r.status != 200:
-                    raise APIError("Couldn't get global API SKZ record filter"
-                                   f' (HTTP {r.status})')
+                    raise APIHTTPError("Couldn't get global API SKZ record "
+                                       f'filter (HTTP {r.status})')
                 json = await r.data
-            except (APIError, HTTPError):
+            except (APIHTTPError, HTTPError):
                 _logger.exception("Couldn't get global API SKZ record filter")
                 skz_possible = None
             else:
@@ -517,7 +518,7 @@ class CSGOAPI(API):
         try:
             api_map = await self.get_map(record.map_name, mode)
         except APIMapError as e:
-            raise APIError('Invalid map name from API PB') from e
+            raise APIDataError('Invalid map name from API PB') from e
         pb = _record_to_pb(record, api_map)
         try:
             pb.place = await self._place_for_pb(pb)
@@ -545,15 +546,15 @@ class CSGOAPI(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API ranks "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API ranks "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get global API ranks") from e
+            raise APIHTTPError("Couldn't get global API ranks") from e
         try:
             api_ranks = _APIPlayerRankList.validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API ranks') from e
+            raise APIDataError('Malformed global API ranks') from e
         if not api_ranks:
             return Profile(name=None, url=player_url, mode=mode,
                            rank=Rank.NEW, points=0, average=0)

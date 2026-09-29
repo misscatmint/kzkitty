@@ -9,7 +9,7 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
 
 from kzkitty.api.http import AsyncPoolManager, HTTPError, make_http_pool
-from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
+from kzkitty.api.kz.base import (API, APIDataError, APIHTTPError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank,
                                  RefreshMapDBResult, PersonalBest, Profile)
@@ -109,7 +109,7 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
     try:
         steamid64 = _steamid_to_steamid64(record.player.id)
     except ValueError as e:
-        raise APIError('Malformed global API Steam ID') from e
+        raise APIDataError('Malformed global API Steam ID') from e
     player_url = _profile_url(steamid64)
     if record.teleports == 0:
         points = record.pro_points
@@ -118,7 +118,7 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
         points = record.nub_points
         place = record.nub_rank
     if not isinstance(points, float) or not isinstance(place, int):
-        raise APIError('Malformed global API PB')
+        raise APIDataError('Malformed global API PB')
     submitted_at = datetime.fromtimestamp(record.id.time / 1000.0, tz=UTC)
     return PersonalBest(id=record.id.int, steamid64=steamid64,
                         player_name=record.player.name, player_url=player_url,
@@ -142,16 +142,16 @@ class CS2API(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API maps "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API maps "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIError("Couldn't get global API maps") from e
+            raise APIHTTPError("Couldn't get global API maps") from e
 
         try:
             results = _APIMapResults.model_validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API maps') from e
+            raise APIDataError('Malformed global API maps') from e
 
         new = updated = deleted = 0
         for api_map in results.values:
@@ -239,7 +239,7 @@ class CS2API(API):
             params['player'] = str(steamid64)
         if api_map is not None:
             if api_map.course is None:
-                raise APIError('Map has no course')
+                raise APIDataError('Map has no course')
             params['map'] = api_map.name
             params['course'] = api_map.course
         if tp_type == Type.TP:
@@ -257,16 +257,16 @@ class CS2API(API):
         try:
             r = await self._session.request('GET', url)
             if r.status != 200:
-                raise APIError("Couldn't get global API PBs "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API PBs "
+                                   f'(HTTP {r.status})')
             json = await r.data
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get global API PBs") from e
+            raise APIHTTPError("Couldn't get global API PBs") from e
 
         try:
             records = _APIRecordResults.model_validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API PBs') from e
+            raise APIDataError('Malformed global API PBs') from e
         return records.values[0] if records.values else None
 
     @override
@@ -323,16 +323,16 @@ class CS2API(API):
                 if r.status == 404:
                     raise APIMapNotFoundError('Map not found')
                 elif r.status != 200:
-                    raise APIError("Couldn't get global API map "
-                                   f'(HTTP {r.status})')
+                    raise APIHTTPError("Couldn't get global API map "
+                                       f'(HTTP {r.status})')
                 json = await r.data
             except HTTPError as e:
-                raise APIConnectionError("Couldn't get global API map") from e
+                raise APIHTTPError("Couldn't get global API map") from e
 
             try:
                 api_map = _APIMap.model_validate_json(json)
             except ValidationError as e:
-                raise APIError('Malformed global API map') from e
+                raise APIDataError('Malformed global API map') from e
 
             courses = api_map.courses
             if course is None:
@@ -440,15 +440,15 @@ class CS2API(API):
                                mode=mode, rank=Rank.UNKNOWN,
                                points=0, average=None)
             else:
-                raise APIError("Couldn't get global API profile "
-                               f'(HTTP {r.status})')
+                raise APIHTTPError("Couldn't get global API profile "
+                                   f'(HTTP {r.status})')
         except HTTPError as e:
-            raise APIConnectionError("Couldn't get global API PBs") from e
+            raise APIHTTPError("Couldn't get global API profile") from e
 
         try:
             profile = _APIProfile.model_validate_json(json)
         except ValidationError as e:
-            raise APIError('Malformed global API profile') from e
+            raise APIDataError('Malformed global API profile') from e
 
         rating = {Mode.CKZ: profile.ckz_rating,
                   Mode.VNL2: profile.vnl_rating}[mode]

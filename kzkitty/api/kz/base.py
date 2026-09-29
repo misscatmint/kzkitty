@@ -13,7 +13,10 @@ class APIError(Exception):
 class APIUnitializedError(APIError):
     pass
 
-class APIConnectionError(APIError):
+class APIHTTPError(APIError):
+    pass
+
+class APIDataError(APIError):
     pass
 
 class APIMapError(APIError):
