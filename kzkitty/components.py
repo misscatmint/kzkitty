@@ -40,7 +40,10 @@ def _avatar_container(avatar_url: str | None, accent_color: Color, body: str
 
 def _formattime(td: timedelta, microseconds: bool=True,
                 force_minutes: bool=False) -> str:
-    mm, ss = divmod(td.seconds, 60)
+    secs, ms = divmod((td.days * 86400 + td.seconds) * 1000
+                      + (td.microseconds + 500) // 1000, 1000)
+    days, secs = divmod(secs, 86400)
+    mm, ss = divmod(secs, 60)
     hh, mm = divmod(mm, 60)
     if hh:
         s = f'{hh:d}:{mm:02d}:{ss:02d}'
@@ -48,17 +51,16 @@ def _formattime(td: timedelta, microseconds: bool=True,
         s = f'{mm:d}:{ss:02d}'
     else:
         s = f'{ss:d}'
-    if td.days:
+    if days:
         def plural(n: int) -> str:
             return 's' if abs(n) != 1 else ''
-        days = f'{td.days:d} day{plural(td.days)}'
+        d = f'{days:d} day{plural(days)}'
         if not hh and not mm:
-            s = f'{days}, {s} second{plural(ss)}' if ss else days
+            s = f'{d}, {s} second{plural(ss)}' if ss else d
         else:
-            s = f'{days}, {s}'
-    if td.microseconds and microseconds:
-        s = f'{s}.{round(td.microseconds, -3):06d}'
-        s = s.rstrip('0').rstrip('.')
+            s = f'{d}, {s}'
+    if ms and microseconds:
+        s = f'{s}.{ms:03d}'.rstrip('0')
     return s
 
 def _map_color(api_map: APIMap) -> int:
