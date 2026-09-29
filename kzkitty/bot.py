@@ -388,7 +388,9 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         address = db_server.address
         location: str | None = db_server.location
     else:
-        db_server = await Server.filter(address=address).first()
+        db_server = (await Server.filter(server_id=ctx.guild_id,
+                                         address=address)
+                                 .first())
         location = db_server.location if db_server is not None else None
 
     host, port = a2s.split_address(address)
