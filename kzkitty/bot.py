@@ -38,11 +38,17 @@ _logger = logging.getLogger('kzkitty.bot')
 
 _tasks: set[asyncio.Task[Any]] = set()
 
-def _create_task[T](coro: Coroutine[Any, Any, T]) -> None:
+def _cleanup_task(task: asyncio.Task[Any]) -> None:
+    _tasks.discard(task)
+    if not task.cancelled() and (exc := task.exception()) is not None:
+        _logger.error('Task %s failed', task.get_name(), exc_info=exc)
+
+def _create_task[T](coro: Coroutine[Any, Any, T], *, name: str | None=None
+                    ) -> None:
     """Register a task (and keep a reference to it)"""
-    task = asyncio.create_task(coro)
+    task = asyncio.create_task(coro, name=name)
     _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
+    task.add_done_callback(_cleanup_task)
 
 # Wrapper to avoid hikari-arc's 4 failure limit for IntervalLoop functions
 async def _refresh_map_db_loop() -> None:
@@ -76,7 +82,7 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
         init_steam(timeout=steam_timeout)
         a2s.init_a2s(timeout=a2s_timeout)
         await init_db(db_url)
-        _create_task(import_defaults())
+        _create_task(import_defaults(), name='import defaults')
         refresh_db_loop.start()
         refresh_servers_loop.start(client)
     client.add_startup_hook(startup)
@@ -520,7 +526,8 @@ async def _refresh_servers(client: _Client) -> None:
     async for db_server in Server.filter(channel_id__isnull=False):
         message = await _server_message(client, db_server)
         if message is not None:
-            _create_task(_refresh_server(message, db_server))
+            _create_task(_refresh_server(message, db_server),
+                         name=f'refresh server {db_server.address}')
 
 # Wrapper to avoid hikari-arc's 4 failure limit for IntervalLoop functions
 async def _refresh_server_loop(client: _Client) -> None:
