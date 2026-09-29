@@ -123,7 +123,7 @@ async def _autocomplete_address(data: AutocompleteData[_Client, str]
                      .limit(25))
     if data.focused_value:
         address = data.focused_value.lower()
-        servers = servers.filter(address=address)
+        servers = servers.filter(address__istartswith=address)
     return [s['address'] for s in await servers.values('address')]
 
 type _SteamProfileURLOption = Annotated[str, StrParams('Steam profile URL')]
