@@ -47,7 +47,8 @@ class Steam:
             raise SteamError("Couldn't parse Steam profile XML") from e
 
     async def steamid64_for_profile(self, url: str) -> int:
-        u = urlsplit(url, scheme='https')
+        u = urlsplit(url if '://' in url else f'https://{url}',
+                     scheme='https')
         if u.netloc != 'steamcommunity.com':
             raise SteamValueError
 
