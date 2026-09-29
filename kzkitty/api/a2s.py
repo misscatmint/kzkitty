@@ -65,7 +65,7 @@ async def _resolve_address(host: str, port: int) -> tuple[str, int]:
     if not isinstance(ip_addr, str):
         raise QueryInvalidAddressError
     ip = ipaddress.ip_address(ip_addr)
-    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+    if not ip.is_global:
         raise QueryInvalidAddressError
     return ip_addr, port
 
@@ -82,12 +82,15 @@ def split_address(address: str) -> tuple[str, str]:
 async def query_server(host: str, port: int | None, timeout: int | None=None
                        ) -> Server:
     port = port if port is not None else 27015
+    if port < 1024 or port > 65535:
+        raise QueryInvalidAddressError
+
     timeout = timeout if timeout is not None else _timeout
 
     try:
         async with asyncio.timeout(timeout):
             ip, port = await _resolve_address(host, port)
-            a2s = AsyncA2S.from_addr(host, port)
+            a2s = AsyncA2S.from_addr(ip, port)
             async with a2s:
                 info = await a2s.info()
                 player_info = await a2s.players()
