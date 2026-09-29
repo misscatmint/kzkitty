@@ -491,6 +491,8 @@ class CSGOAPI(API):
     async def get_latest(self, steamid64: int, mode: Mode,
                          tp_type: Type=Type.ANY) -> PersonalBest | None:
         async with TaskGroup() as tg:
+            # For Type.ANY, we can't combine these into one HTTP request
+            # because the API omits random PBs in that case (no idea why).
             if tp_type in {Type.TP, Type.ANY}:
                 tps_task = tg.create_task(
                         self._records_for_steamid64(steamid64, mode, stage=0,
