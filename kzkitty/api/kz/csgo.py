@@ -475,6 +475,9 @@ class CSGOAPI(API):
             pbs = [pb for pb in pbs if pb.teleports == 0]
         elif tp_type == Type.TP:
             pbs = [pb for pb in pbs if pb.teleports]
+        if not pbs:
+            return None
+
         pbs.sort(key=lambda pb: pb.time)
         pb = pbs[0]
         try:
