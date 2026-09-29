@@ -52,7 +52,7 @@ def init_a2s(timeout: int | None=None) -> None:
 async def _resolve_address(host: str, port: int) -> tuple[str, int]:
     loop = asyncio.get_running_loop()
     try:
-        addrinfo = await loop.getaddrinfo(host, port,
+        addrinfo = await loop.getaddrinfo(host, port, family=socket.AF_INET,
                                           type=socket.SOCK_DGRAM)
     except socket.gaierror as e:
         raise QueryInvalidAddressError from e
@@ -69,14 +69,20 @@ async def _resolve_address(host: str, port: int) -> tuple[str, int]:
         raise QueryInvalidAddressError
     return ip_addr, port
 
-def split_address(address: str) -> tuple[str, str]:
+def parse_address(address: str) -> tuple[str, int]:
+    if address.startswith('['):
+        raise QueryInvalidAddressError
     parts = address.split(':', 1)
     if len(parts) == 2:
-        host, port = parts
+        host, portstr = parts
+        portstr = portstr or '27015'
+        if not portstr.isascii() or not portstr.isdecimal():
+            raise QueryInvalidAddressError
+        port = int(portstr)
     else:
-        host, port = address, ''
-    if not port:
-        port = '27015'
+        host, port = address, 27015
+    if not host:
+        raise QueryInvalidAddressError
     return host, port
 
 async def query_server(host: str, port: int | None, timeout: int | None=None

@@ -304,10 +304,14 @@ async def server_component(server: a2s.Server, api: API | None,
 def server_unavailable_component(db_server: Server, reason: str
                                  ) -> ContainerComponentBuilder:
     result_time = datetime.now(tz=UTC)
-    host, port = a2s.split_address(db_server.address)
-    port = f':{port}' if port != '27015' else ''
+    try:
+        host, port = a2s.parse_address(db_server.address)
+    except a2s.QueryInvalidAddressError:
+        address = db_server.address
+    else:
+        address = host if port == 27015 else f'{host}:{port}'
     body = f"""## {db_server.name}
-**IP**: {host}{port} ({db_server.game})"""
+**IP**: {address} ({db_server.game})"""
     if db_server.location:
         body += f"""
 **Location**: {db_server.location}"""
