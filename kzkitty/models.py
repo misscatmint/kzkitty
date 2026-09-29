@@ -39,6 +39,9 @@ class Course(Model):
     vnl_tier = fields.IntField(null=True)
     vnl_pro_tier = fields.IntField(null=True)
 
+    class Meta: # pyright: ignore # pyrefly: ignore
+        unique_together = ('course_id', 'map_id')
+
 class Player(Model):
     user_id = fields.BigIntField()
     server_id = fields.BigIntField()

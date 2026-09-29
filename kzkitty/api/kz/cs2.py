@@ -293,11 +293,14 @@ class CS2API(API):
         if db_map is not None:
             name = db_map.name
             if course is None:
-                db_course = await Course.filter(course_id=1,
-                                                map_id=db_map.map_id).first()
+                db_course = (await Course.filter(course_id=1,
+                                                 map_id=db_map.map_id)
+                                         .first())
             else:
-                db_course = await Course.filter(name__icontains=course,
-                                                map_id=db_map.map_id).first()
+                db_course = (await Course.filter(name__icontains=course,
+                                                 map_id=db_map.map_id)
+                                         .order_by('course_id')
+                                         .first())
             if db_course is not None:
                 course_id = db_course.course_id
                 course_name = db_course.name
