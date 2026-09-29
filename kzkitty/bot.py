@@ -285,8 +285,6 @@ async def _handle_error(ctx: _Context, exc: Exception) -> None:
 
     SteamError and APIError will still get raised.
     """
-    if ctx.issued_response:
-        await ctx.interaction.delete_initial_response()
     if isinstance(exc, _PlayerNotFound):
         await ctx.respond('Not registered', flags=MessageFlag.EPHEMERAL)
         return
