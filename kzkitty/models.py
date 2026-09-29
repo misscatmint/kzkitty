@@ -43,9 +43,9 @@ class Course(Model):
         unique_together = ('course_id', 'map_id')
 
 class Player(Model):
-    user_id = fields.BigIntField()
-    server_id = fields.BigIntField()
-    steamid64 = fields.BigIntField()
+    user_id: fields.Field[int] = fields.BigIntField()
+    server_id: fields.Field[int] = fields.BigIntField()
+    steamid64: fields.Field[int] = fields.BigIntField()
     mode = fields.CharEnumField(Mode, default=Mode.KZT)
 
     class Meta: # pyright: ignore # pyrefly: ignore
@@ -60,9 +60,9 @@ class Server(Model):
     address = fields.CharField(max_length=255)
     game = fields.CharEnumField(Game)
     location = fields.CharField(max_length=255)
-    server_id = fields.BigIntField()
-    channel_id = fields.BigIntField(null=True)
-    message_id = fields.BigIntField(null=True)
+    server_id: fields.Field[int] = fields.BigIntField()
+    channel_id: fields.Field[int | None] = fields.BigIntField(null=True)
+    message_id: fields.Field[int | None] = fields.BigIntField(null=True)
     is_default = fields.BooleanField(default=False)
 
     class Meta: # pyright: ignore # pyrefly: ignore
