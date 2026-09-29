@@ -1,14 +1,14 @@
 import logging
 
-from kzkitty.api.kz.base import (API, APIConnectionError, APIError, APIMap,
-                                 APIMapAmbiguousError, APIMapError,
+from kzkitty.api.kz.base import (API, APIDataError, APIError, APIHTTPError,
+                                 APIMap, APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, APIUnitializedError,
                                  Rank, PersonalBest, Profile)
 from kzkitty.api.kz.csgo import CSGOAPI
 from kzkitty.api.kz.cs2 import CS2API
 from kzkitty.models import Mode
 
-__all__ = ['API', 'APIConnectionError', 'APIError', 'APIMap',
+__all__ = ['API', 'APIDataError', 'APIError', 'APIHTTPError', 'APIMap',
            'APIMapAmbiguousError', 'APIMapError', 'APIMapNotFoundError',
            'PersonalBest', 'Profile', 'Rank', 'api_for_mode']
 

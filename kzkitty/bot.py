@@ -18,7 +18,7 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
 from kzkitty.api import a2s
-from kzkitty.api.kz import (API, APIConnectionError, APIError, APIMap,
+from kzkitty.api.kz import (API, APIError, APIHTTPError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
                             init_api, refresh_map_db)
@@ -223,7 +223,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     api = api_for_mode(mode)
     try:
         api_map = await api.get_map(map_name, mode, course, bonus)
-    except (APIConnectionError, APIMapNotFoundError) as e:
+    except (APIHTTPError, APIMapNotFoundError) as e:
         if mode_name is not None:
             raise
         mode = {Mode.KZT: Mode.CKZ,
@@ -231,8 +231,8 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
                 Mode.VNL: Mode.VNL2,
                 Mode.CKZ: Mode.KZT,
                 Mode.VNL2: Mode.VNL}[mode]
-        if isinstance(e, APIConnectionError):
-            _logger.exception('API connection failure during map lookup')
+        if isinstance(e, APIHTTPError):
+            _logger.exception('API HTTP error during map lookup')
         api = api_for_mode(mode)
         api_map = await api.get_map(map_name, mode, course, bonus)
 
