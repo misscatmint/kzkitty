@@ -509,7 +509,6 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
         component = server_unavailable_component(db_server,
                                                  'Server query failed')
     except a2s.QueryTimeoutError:
-        _logger.exception('a2s query timed out for %s', db_server.address)
         component = server_unavailable_component(db_server,
                                                  'Server query timed out')
     except a2s.QueryInvalidAddressError:
