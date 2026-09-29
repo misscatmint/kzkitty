@@ -44,6 +44,13 @@ def _create_task[T](coro: Coroutine[Any, Any, T]) -> None:
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
 
+# Wrapper to avoid hikari-arc's 4 failure limit for IntervalLoop functions
+async def _refresh_map_db_loop() -> None:
+    try:
+        await refresh_map_db()
+    except Exception:
+        _logger.exception('Map database refresh failed')
+
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            refresh_server_mins: int, api_timeout: int, steam_timeout: int,
            a2s_timeout: int) -> None:
@@ -58,9 +65,10 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.include(_slash_profile)
     client.include(_slash_server)
 
-    refresh_db_loop = IntervalLoop(refresh_map_db, hours=refresh_db_hours,
+    refresh_db_loop = IntervalLoop(_refresh_map_db_loop,
+                                   hours=refresh_db_hours,
                                    run_on_start=True)
-    refresh_servers_loop = IntervalLoop(refresh_servers,
+    refresh_servers_loop = IntervalLoop(_refresh_server_loop,
                                         minutes=refresh_server_mins,
                                         run_on_start=True)
     async def startup(client: _Client) -> None:
@@ -516,9 +524,16 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
 
     await message.edit(component=component)
 
-async def refresh_servers(client: _Client) -> None:
+async def _refresh_servers(client: _Client) -> None:
     """Update all server status messages"""
     async for db_server in Server.filter(channel_id__isnull=False):
         message = await _server_message(client, db_server)
         if message is not None:
             _create_task(_refresh_server(message, db_server))
+
+# Wrapper to avoid hikari-arc's 4 failure limit for IntervalLoop functions
+async def _refresh_server_loop(client: _Client) -> None:
+    try:
+        await _refresh_servers(client)
+    except Exception:
+        _logger.exception('Refreshing servers failed')
