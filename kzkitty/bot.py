@@ -319,7 +319,7 @@ async def _handle_error(ctx: _Context, exc: Exception) -> None:
 @slash_command('register', 'Register account',
                autodefer=AutodeferMode.EPHEMERAL)
 async def _slash_register(ctx: _Context, profile: _SteamProfileURLOption,
-                          mode_name: _ModeOption=Mode.KZT) -> None:
+                          mode_name: _ModeOption) -> None:
     """Register the user with a given Steam profile and game mode"""
     steam = get_steam()
     steamid64 = await steam.steamid64_for_profile(profile)
