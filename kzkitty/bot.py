@@ -274,9 +274,12 @@ async def _get_server_map(server: a2s.Server, mode: Mode | None
         mode = ({a2s.Game.CSGO: Mode.KZT, a2s.Game.CS2: Mode.CKZ}
                 .get(cast('a2s.Game', server.game)))
     if mode is not None:
-        with contextlib.suppress(APIMapNotFoundError):
-            api, api_map = await _get_map(mode, server.map_name,
-                                          fallback=False)
+        try:
+            with contextlib.suppress(APIMapNotFoundError):
+                api, api_map = await _get_map(mode, server.map_name,
+                                              fallback=False)
+        except APIError:
+            _logger.exception('API error during server query')
         if api is None:
             api = api_for_mode(mode)
     return api, api_map
