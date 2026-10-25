@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.15.1"
 dependencies = [
     "hikari-arc[rest]>=2.3.2",
-    "hikari[server,speedups]>=2.6.0",
+    "hikari[server]>=2.6.0",
     "little-a2s>=0.7.3",
     "pydantic>=2.14.1",
     "tortoise-orm>=1.1.9",
