@@ -366,6 +366,8 @@ class CS2API(API):
         pro_tier_name = _tier_name(pro_tier)
 
         url = f'https://cs2kz.org/maps/{quote(name)}'
+        if mode == Mode.VNL2:
+            url += '?mode=vanilla'
         thumbnail_url = ('https://raw.githubusercontent.com/KZGlobalTeam/'
                          'cs2kz-images/public/webp/full/'
                          f'{quote(name)}/{course_id}.webp')
