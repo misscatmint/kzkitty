@@ -268,12 +268,11 @@ async def server_component(server: a2s.Server, api: API | None,
     port = f':{server.port}' if server.port != 27015 else ''
     game = {str(a2s.Game.CSGO): 'CSGO',
             str(a2s.Game.CS2): 'CS2'}.get(server.game, server.game)
-    body = f"""## {server.name}
+    body = f"""## {server.name} ({game})
 
-**IP**: `connect {server.host}{port}` ({game})"""
+**IP**: `connect {server.host}{port}`"""
     if location:
-        body += f"""
-**Location**: {location}"""
+        body += f' ({location})'
     body += f"""
 **Map**: {map_name}"""
     if api_map is not None:
