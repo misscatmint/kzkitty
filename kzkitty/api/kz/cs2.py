@@ -419,8 +419,7 @@ class CS2API(API):
         if record is None:
             return []
         pbs = [_record_to_pb(record, api_map)]
-        pro_rank = record.pro_rank
-        if pro_rank is not None:
+        if record.pro_rank is not None:
             return pbs
         pro_record = await self._top_record(mode=api_map.mode,
                                             api_map=api_map, tp_type=Type.PRO,
