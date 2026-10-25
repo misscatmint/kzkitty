@@ -407,7 +407,11 @@ async def _slash_map(ctx: _Context, map_name: _MapOption,
     fallback = impossible_fallback = mode_name is None
     api, api_map = await _get_map(mode, map_name, course, bonus, fallback,
                                   impossible_fallback)
-    wrs = await api.get_wrs(api_map)
+    try:
+        wrs = await api.get_wrs(api_map)
+    except APIHTTPError:
+        _logger.exception('API HTTP error during map WR lookup')
+        wrs = None
     component = map_component(api_map, wrs)
     await ctx.respond(component=component)
 

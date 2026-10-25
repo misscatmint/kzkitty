@@ -212,7 +212,7 @@ def _wr_time(pb: PersonalBest) -> str:
     player_name = pb.player_name or pb.steamid64
     return f'{_formattime(pb.time)} by [{player_name}]({pb.player_url})'
 
-def map_component(api_map: APIMap, wrs: list[PersonalBest]
+def map_component(api_map: APIMap, wrs: list[PersonalBest] | None
                   ) -> ContainerComponentBuilder:
     map_info = _map_info(api_map)
     body = f"""## [{api_map.name}]({api_map.url})
@@ -221,16 +221,19 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
 """
     if api_map.has_tp_wrs:
         tp_pb = pro_pb = None
-        tp_pb_time = pro_pb_time = '(none)'
-        for pb in wrs:
-            if pb.teleports == 0:
-                pro_pb = pb
-            else:
-                tp_pb = pb
-        if tp_pb is not None:
-            tp_pb_time = _wr_time(tp_pb)
-        if pro_pb is not None:
-            pro_pb_time = _wr_time(pro_pb)
+        if wrs is not None:
+            tp_pb_time = pro_pb_time = '(none)'
+            for pb in wrs:
+                if pb.teleports == 0:
+                    pro_pb = pb
+                else:
+                    tp_pb = pb
+            if tp_pb is not None:
+                tp_pb_time = _wr_time(tp_pb)
+            if pro_pb is not None:
+                pro_pb_time = _wr_time(pro_pb)
+        else:
+            tp_pb_time = pro_pb_time = '(unknown)'
         body += f"""**WR** (TP): {tp_pb_time}
 **WR** (PRO): {pro_pb_time}
 """
@@ -245,8 +248,11 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest]
             pro_pb = pro_pbs[0]
             body += f"""**WR** (PRO): {_wr_time(pro_pb)}
 """
-    else:
+    elif wrs is not None:
         body += """**WR**: (none)
+"""
+    else:
+        body += """**WR**: (unknown)
 """
 
     accent_color = Color(_map_color(api_map))
