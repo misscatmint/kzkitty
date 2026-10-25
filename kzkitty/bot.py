@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import logging
-from dataclasses import dataclass
 from typing import Annotated, Any, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -17,6 +16,8 @@ from hikari import (ForbiddenError, GatewayBot, Intents, Member, MessageFlag,
                     NotFoundError, RESTBot)
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
+if TYPE_CHECKING:
+    from hikari.api import ComponentBuilder
 
 from kzkitty.api import a2s
 from kzkitty.api.kz import (API, APIError, APIHTTPError, APIMap,
@@ -492,37 +493,48 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
                                        location=location)
     await ctx.respond(component=component)
 
-@dataclass
-class _ServerMessage:
-    id: int
-    channel_id: int
-
-async def _server_message(client: _Client, db_server: Server
-                          ) -> _ServerMessage | None:
-    """Create/find a status message for a server"""
+async def _refresh_server_message(client: _Client, db_server: Server,
+                                  component: ComponentBuilder) -> None:
+    """Create/update a status message for a server"""
     if db_server.channel_id is None:
-        return None
+        return
 
+    message = None
     if db_server.message_id is not None:
-        return _ServerMessage(db_server.message_id, db_server.channel_id)
+        try:
+            message = await client.rest.fetch_message(db_server.channel_id,
+                                                      db_server.message_id)
+        except ForbiddenError:
+            _logger.info('server message %s in channel %s forbidden',
+                         db_server.message_id, db_server.channel_id)
+            return
+        except NotFoundError:
+            _logger.info('server message %s in channel %s not found',
+                         db_server.message_id, db_server.channel_id)
 
-    component = server_unavailable_component(db_server,
-                                             'Querying server...')
-    try:
-        message = await client.rest.create_message(
-            channel=db_server.channel_id, component=component)
-    except ForbiddenError:
-        _logger.info('creating server message in channel %s forbidden',
-                     db_server.channel_id)
-        return None
-    except NotFoundError:
-        _logger.info('server message channel %s not found',
-                     db_server.channel_id)
-        return None
-    else:
+    if message is None:
+        try:
+            message = await client.rest.create_message(
+                channel=db_server.channel_id, component=component)
+        except ForbiddenError:
+            _logger.info('creating server message in channel %s forbidden',
+                         db_server.channel_id)
+            return
+        except NotFoundError:
+            _logger.info('server message channel %s not found',
+                         db_server.channel_id)
+            return
         db_server.message_id = int(message.id)
         await db_server.save(update_fields=['message_id'])
-        return _ServerMessage(message.id, db_server.channel_id)
+    else:
+        try:
+            await message.edit(component=component)
+        except ForbiddenError:
+            _logger.info('editing server message %s in channel %s forbidden',
+                         message.id, db_server.channel_id)
+        except NotFoundError:
+            _logger.info('server message %s channel %s not found',
+                         message.id, db_server.channel_id)
 
 async def _refresh_server(client: _Client, db_server: Server, delay: float,
                           timeout: float) -> None:
@@ -532,9 +544,7 @@ async def _refresh_server(client: _Client, db_server: Server, delay: float,
         await db_server.refresh_from_db()
     except DoesNotExist:
         return
-
-    server_message = await _server_message(client, db_server)
-    if server_message is None:
+    if db_server.channel_id is None:
         return
 
     try:
@@ -554,9 +564,7 @@ async def _refresh_server(client: _Client, db_server: Server, delay: float,
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
         component = await server_component(server, api, api_map,
                                            location=db_server.location)
-
-    await client.rest.edit_message(server_message.channel_id,
-                                   server_message.id, component=component)
+    await _refresh_server_message(client, db_server, component)
 
 async def _refresh_servers(client: _Client, interval: float, timeout: float
                            ) -> None:
