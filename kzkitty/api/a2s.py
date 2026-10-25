@@ -42,13 +42,6 @@ class Server:
     max_players: int
     players: list[Player]
 
-_timeout: int | None = None
-
-def init_a2s(timeout: int | None=None) -> None:
-    global _timeout
-    if _timeout is None:
-        _timeout = timeout
-
 async def _resolve_address(host: str, port: int) -> tuple[str, int]:
     loop = asyncio.get_running_loop()
     try:
@@ -85,13 +78,11 @@ def parse_address(address: str) -> tuple[str, int]:
         raise QueryInvalidAddressError
     return host, port
 
-async def query_server(host: str, port: int | None, timeout: int | None=None
+async def query_server(host: str, port: int | None, timeout: float | None=None
                        ) -> Server:
     port = port if port is not None else 27015
     if port < 1024 or port > 65535:
         raise QueryInvalidAddressError
-
-    timeout = timeout if timeout is not None else _timeout
 
     try:
         async with asyncio.timeout(timeout):

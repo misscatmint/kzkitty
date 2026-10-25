@@ -35,6 +35,8 @@ from kzkitty.models import (Course, Map, Mode, Player, Server, Type, close_db,
 type _Client = Client[Any]
 type _Context = Context[Any]
 
+_SERVER_MESSAGE_SLACK = 5
+
 _logger = logging.getLogger('kzkitty.bot')
 
 _tasks: set[asyncio.Task[Any]] = set()
@@ -62,6 +64,12 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            refresh_server_mins: int, api_timeout: int, steam_timeout: int,
            a2s_timeout: int) -> None:
     """Register bot commands and hooks"""
+    if a2s_timeout + _SERVER_MESSAGE_SLACK >= refresh_server_mins * 60:
+        raise ValueError(f'a2s_timeout ({a2s_timeout}s) plus '
+                         f'{_SERVER_MESSAGE_SLACK}s server message slack '
+                         'must be shorter than the refresh interval '
+                         f'({refresh_server_mins}m)')
+
     client.set_error_handler(_handle_error)
     client.include(_slash_register)
     client.include(_slash_unregister)
@@ -81,11 +89,11 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     async def startup(client: _Client) -> None:
         init_api(timeout=api_timeout)
         init_steam(timeout=steam_timeout)
-        a2s.init_a2s(timeout=a2s_timeout)
         await init_db(db_url)
         _create_task(import_defaults(), name='import defaults')
         refresh_db_loop.start()
-        refresh_servers_loop.start(client)
+        refresh_servers_loop.start(client, refresh_server_mins * 60,
+                                   a2s_timeout)
     client.add_startup_hook(startup)
 
     async def shutdown(_: _Client) -> None:
@@ -516,15 +524,22 @@ async def _server_message(client: _Client, db_server: Server
         await db_server.save(update_fields=['message_id'])
         return _ServerMessage(message.id, db_server.channel_id)
 
-async def _refresh_server(client: _Client, db_server: Server) -> None:
+async def _refresh_server(client: _Client, db_server: Server, delay: float,
+                          timeout: float) -> None:
     """Query a server and update its status message"""
+    await asyncio.sleep(delay)
+    try:
+        await db_server.refresh_from_db()
+    except DoesNotExist:
+        return
+
     server_message = await _server_message(client, db_server)
     if server_message is None:
         return
 
     try:
         host, port = a2s.parse_address(db_server.address)
-        server = await a2s.query_server(host, port)
+        server = await a2s.query_server(host, port, timeout)
     except a2s.QueryA2SError:
         _logger.exception('a2s query failed for %s', db_server.address)
         component = server_unavailable_component(db_server,
@@ -543,15 +558,21 @@ async def _refresh_server(client: _Client, db_server: Server) -> None:
     await client.rest.edit_message(server_message.channel_id,
                                    server_message.id, component=component)
 
-async def _refresh_servers(client: _Client) -> None:
-    """Update all server status messages"""
-    async for db_server in Server.filter(channel_id__isnull=False):
-        _create_task(_refresh_server(client, db_server),
+async def _refresh_servers(client: _Client, interval: float, timeout: float
+                           ) -> None:
+    """Queue server status message updates"""
+    db_servers = await Server.filter(channel_id__isnull=False)
+    spread = interval - (timeout + _SERVER_MESSAGE_SLACK)
+    step = spread / max(len(db_servers), 1)
+    for i, db_server in enumerate(db_servers):
+        delay = i * step
+        _create_task(_refresh_server(client, db_server, delay, timeout),
                      name=f'refresh server {db_server.address}')
 
-# Wrapper to avoid hikari-arc's 4 failure limit for IntervalLoop functions
-async def _refresh_server_loop(client: _Client) -> None:
+async def _refresh_server_loop(client: _Client, interval: float,
+                               timeout: float) -> None:
+    """Wrapper to avoid hikari-arc's 4 failure limit in IntervalLoop"""
     try:
-        await _refresh_servers(client)
+        await _refresh_servers(client, interval, timeout)
     except Exception:
         _logger.exception('Refreshing servers failed')
