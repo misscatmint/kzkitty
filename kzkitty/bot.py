@@ -558,7 +558,7 @@ async def _refresh_server(client: _Client, db_server: Server, delay: float,
         component = server_unavailable_component(db_server,
                                                  'Invalid server address')
     except a2s.QueryTimeoutError:
-        _logger.exception('a2s query to %s timed out', db_server.address)
+        _logger.info('a2s query to %s timed out', db_server.address)
         return
     else:
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
