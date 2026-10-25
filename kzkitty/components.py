@@ -12,6 +12,7 @@ from hikari.impl import (ContainerComponentBuilder,
 from kzkitty.api import a2s
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
+from kzkitty.models import Mode
 if TYPE_CHECKING:
     from kzkitty.models import Player, Server
 
@@ -76,7 +77,7 @@ def _map_color(api_map: APIMap) -> int:
                 9: 0x555555, 10: 0x000000}.get(api_map.tier or 0, 0xcccccc)
 
 def _map_info(api_map: APIMap, pro: bool | None=None,
-              include_course: bool=True, include_mode: bool=True) -> str:
+              include_course: bool=True) -> str:
 
     extra = ''
     if include_course:
@@ -85,15 +86,14 @@ def _map_info(api_map: APIMap, pro: bool | None=None,
         elif api_map.course is not None:
             extra = f'**Course**: {api_map.course}'
 
-    if include_mode:
-        extra += f"""
-**Mode**: {api_map.mode}{' (PRO)' if pro else ''}"""
+    # Show nicer looking mode names where possible
+    mode = {Mode.VNL2: Mode.VNL}.get(api_map.mode, api_map.mode)
 
     if (pro is None and api_map.tier is not None and
         api_map.pro_tier is not None and api_map.tier != api_map.pro_tier):
         extra += f"""
-**Tier** (TP): {api_map.tier} - {api_map.tier_name}
-**Tier** (PRO): {api_map.pro_tier} - {api_map.pro_tier_name}"""
+**Tier**: {api_map.tier} - {api_map.tier_name} ({mode} TP) / """
+        extra += f'{api_map.pro_tier} - {api_map.pro_tier_name} ({mode} PRO)'
     else:
         if pro and api_map.pro_tier is not None:
             tier: int | None = api_map.pro_tier
@@ -103,7 +103,7 @@ def _map_info(api_map: APIMap, pro: bool | None=None,
             tier_name = api_map.tier_name
         if tier is not None:
             extra += f"""
-**Tier**: {tier} - {tier_name}"""
+**Tier**: {tier} - {tier_name} ({mode})"""
         elif api_map.bonus is None:
             extra += """
 **Tier**: (unknown)"""
@@ -277,7 +277,7 @@ async def server_component(server: a2s.Server, api: API | None,
     body += f"""
 **Map**: {map_name}"""
     if api_map is not None:
-        body += _map_info(api_map, include_course=False, include_mode=False)
+        body += _map_info(api_map, include_course=False)
     body += f"""
 **Players**: {server.player_count}/{server.max_players}"""
     for player in server.players:
