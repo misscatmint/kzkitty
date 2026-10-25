@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from dataclasses import dataclass
 from typing import Annotated, Any, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -12,8 +13,8 @@ from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
                  slash_command)
 from arc.abc.client import Client
 from arc.utils import IntervalLoop
-from hikari import (ForbiddenError, GatewayBot, Intents, Member, Message,
-                    MessageFlag, NotFoundError, RESTBot)
+from hikari import (ForbiddenError, GatewayBot, Intents, Member, MessageFlag,
+                    NotFoundError, RESTBot)
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
@@ -483,24 +484,19 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
                                        location=location)
     await ctx.respond(component=component)
 
+@dataclass
+class _ServerMessage:
+    id: int
+    channel_id: int
+
 async def _server_message(client: _Client, db_server: Server
-                          ) -> Message | None:
+                          ) -> _ServerMessage | None:
     """Create/find a status message for a server"""
     if db_server.channel_id is None:
         return None
 
     if db_server.message_id is not None:
-        try:
-            message = await client.rest.fetch_message(db_server.channel_id,
-                                                      db_server.message_id)
-        except ForbiddenError:
-            _logger.info('server message %s in channel %s forbidden',
-                         db_server.channel_id, db_server.message_id)
-        except NotFoundError:
-            _logger.info('server message %s in channel %s not found',
-                         db_server.channel_id, db_server.message_id)
-        else:
-            return message
+        return _ServerMessage(db_server.message_id, db_server.channel_id)
 
     component = server_unavailable_component(db_server,
                                              'Querying server...')
@@ -518,10 +514,14 @@ async def _server_message(client: _Client, db_server: Server
     else:
         db_server.message_id = int(message.id)
         await db_server.save(update_fields=['message_id'])
-        return message
+        return _ServerMessage(message.id, db_server.channel_id)
 
-async def _refresh_server(message: Message, db_server: Server) -> None:
+async def _refresh_server(client: _Client, db_server: Server) -> None:
     """Query a server and update its status message"""
+    server_message = await _server_message(client, db_server)
+    if server_message is None:
+        return
+
     try:
         host, port = a2s.parse_address(db_server.address)
         server = await a2s.query_server(host, port)
@@ -539,15 +539,15 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
         component = await server_component(server, api, api_map,
                                            location=db_server.location)
-    await message.edit(component=component)
+
+    await client.rest.edit_message(server_message.channel_id,
+                                   server_message.id, component=component)
 
 async def _refresh_servers(client: _Client) -> None:
     """Update all server status messages"""
     async for db_server in Server.filter(channel_id__isnull=False):
-        message = await _server_message(client, db_server)
-        if message is not None:
-            _create_task(_refresh_server(message, db_server),
-                         name=f'refresh server {db_server.address}')
+        _create_task(_refresh_server(client, db_server),
+                     name=f'refresh server {db_server.address}')
 
 # Wrapper to avoid hikari-arc's 4 failure limit for IntervalLoop functions
 async def _refresh_server_loop(client: _Client) -> None:
