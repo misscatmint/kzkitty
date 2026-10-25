@@ -281,6 +281,10 @@ async def server_component(server: a2s.Server, api: API | None,
     body += f"""
 **Players**: {server.player_count}/{server.max_players}"""
     for player in server.players:
+        if not player.name:
+            # The server likely isn't sending player names, so just include
+            # these players in the player count.
+            continue
         player_time = _formattime(player.duration, microseconds=False,
                                   force_minutes=True)
         body += f"""
