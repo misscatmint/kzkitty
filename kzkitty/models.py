@@ -39,7 +39,7 @@ class Course(Model):
     vnl_tier = fields.IntField(null=True)
     vnl_pro_tier = fields.IntField(null=True)
 
-    class Meta: # pyright: ignore # pyrefly: ignore
+    class Meta: # pyright: ignore # pyrefly: ignore # ty: ignore
         unique_together = ('course_id', 'map_id')
 
 class Player(Model):
@@ -48,7 +48,7 @@ class Player(Model):
     steamid64: fields.Field[int] = fields.BigIntField()
     mode = fields.CharEnumField(Mode, default=Mode.KZT)
 
-    class Meta: # pyright: ignore # pyrefly: ignore
+    class Meta: # pyright: ignore # pyrefly: ignore # ty: ignore
         unique_together = ('user_id', 'server_id')
 
 class Game(StrEnum):
@@ -65,7 +65,7 @@ class Server(Model):
     message_id: fields.Field[int | None] = fields.BigIntField(null=True)
     is_default = fields.BooleanField(default=False)
 
-    class Meta: # pyright: ignore # pyrefly: ignore
+    class Meta: # pyright: ignore # pyrefly: ignore # ty: ignore
         unique_together = ('address', 'server_id')
 
 async def init_db(db_url: str) -> None:

@@ -97,8 +97,7 @@ def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
         refresh_server_mins: int=1, api_timeout: int=15, steam_timeout: int=5,
         a2s_timeout: int=5) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
-    bot = GatewayBot( # ty: ignore[call-non-callable]
-                     discord_token, intents=Intents.NONE, banner=None,
+    bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
