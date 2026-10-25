@@ -347,7 +347,7 @@ class CSGOAPI(API):
 
     @override
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
-                      bonus: int | None=None) -> APIMap:
+                      bonus: int | None=None, search: bool=False) -> APIMap:
         if not re.fullmatch(r'[A-Za-z0-9_]+', name):
             raise APIMapError('Invalid map name')
 
@@ -355,12 +355,13 @@ class CSGOAPI(API):
         try:
             db_map = await Map.get(name__iexact=name, is_cs2=False)
         except DoesNotExist:
-            db_maps = list(await Map.filter(name__icontains=name,
-                                            is_cs2=False))
-            if len(db_maps) > 1:
-                raise APIMapAmbiguousError(db_maps)
-            elif db_maps:
-                db_map = db_maps[0]
+            if search:
+                db_maps = list(await Map.filter(name__icontains=name,
+                                                is_cs2=False))
+                if len(db_maps) > 1:
+                    raise APIMapAmbiguousError(db_maps)
+                elif db_maps:
+                    db_map = db_maps[0]
 
         if db_map is not None:
             name = db_map.name

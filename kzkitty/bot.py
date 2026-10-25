@@ -213,7 +213,8 @@ async def _get_player(ctx: _Context, player_member: Member | None=None
 
 async def _get_map(mode: Mode, map_name: str, course: str | None=None,
                    bonus: int | None=None, fallback: bool=True,
-                   impossible_fallback: bool=True) -> tuple[API, APIMap]:
+                   impossible_fallback: bool=True, search: bool=True
+                   ) -> tuple[API, APIMap]:
     """Look up a map/course/bonus for a given mode.
 
     If the user hasn't explicitly chosen a specific mode, this will fall back
@@ -221,7 +222,8 @@ async def _get_map(mode: Mode, map_name: str, course: str | None=None,
     """
     api = api_for_mode(mode)
     try:
-        api_map = await api.get_map(map_name, mode, course, bonus)
+        api_map = await api.get_map(map_name, mode, course, bonus,
+                                    search=search)
     except (APIHTTPError, APIMapNotFoundError) as e:
         if not fallback:
             raise
@@ -233,7 +235,8 @@ async def _get_map(mode: Mode, map_name: str, course: str | None=None,
         if isinstance(e, APIHTTPError):
             _logger.exception('API HTTP error during map lookup')
         api = api_for_mode(mode)
-        api_map = await api.get_map(map_name, mode, course, bonus)
+        api_map = await api.get_map(map_name, mode, course, bonus,
+                                    search=search)
 
     # If a player asks for a map impossible for their default mode (and an
     # explicit mode isn't set), try to return the map in a more possible mode
@@ -258,7 +261,8 @@ async def _get_map(mode: Mode, map_name: str, course: str | None=None,
             old_api = api
             old_api_map = api_map
             api = api_for_mode(mode)
-            api_map = await api.get_map(map_name, mode, course, bonus)
+            api_map = await api.get_map(map_name, mode, course, bonus,
+                                        search=search)
             if api_map.impossible:
                 # This is unlikely to be possible, but if falling back
                 # produces another impossible map response, we return things
@@ -277,7 +281,7 @@ async def _get_server_map(server: a2s.Server, mode: Mode | None
         try:
             with contextlib.suppress(APIMapNotFoundError):
                 api, api_map = await _get_map(mode, server.map_name,
-                                              fallback=False)
+                                              fallback=False, search=False)
         except APIError:
             _logger.exception('API error during server query')
         if api is None:
@@ -366,8 +370,9 @@ async def _slash_pb(ctx: _Context, map_name: _MapOption,
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
     fallback = impossible_fallback = mode_name is None
-    api, api_map = await _get_map(mode, map_name, course, bonus, fallback,
-                                  impossible_fallback)
+    api, api_map = await _get_map(mode, map_name, course, bonus,
+                                  fallback=fallback,
+                                  impossible_fallback=impossible_fallback)
     pb = await api.get_pb(player.steamid64, api_map, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
@@ -408,8 +413,9 @@ async def _slash_map(ctx: _Context, map_name: _MapOption,
             mode = player.mode
 
     fallback = impossible_fallback = mode_name is None
-    api, api_map = await _get_map(mode, map_name, course, bonus, fallback,
-                                  impossible_fallback)
+    api, api_map = await _get_map(mode, map_name, course, bonus,
+                                  fallback=fallback,
+                                  impossible_fallback=impossible_fallback)
     try:
         wrs = await api.get_wrs(api_map)
     except APIHTTPError:

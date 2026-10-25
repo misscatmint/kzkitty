@@ -271,7 +271,7 @@ class CS2API(API):
 
     @override
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
-                      bonus: int | None=None) -> APIMap:
+                      bonus: int | None=None, search: bool=False) -> APIMap:
         if bonus is not None:
             raise APIMapError("Bonuses aren't supported on CS2. "
                               'Did you mean to specify a course?')
@@ -282,12 +282,13 @@ class CS2API(API):
         try:
             db_map = await Map.get(name__iexact=name, is_cs2=True)
         except DoesNotExist:
-            db_maps = list(await Map.filter(name__icontains=name,
-                                            is_cs2=True))
-            if len(db_maps) > 1:
-                raise APIMapAmbiguousError(db_maps)
-            elif db_maps:
-                db_map = db_maps[0]
+            if search:
+                db_maps = list(await Map.filter(name__icontains=name,
+                                                is_cs2=True))
+                if len(db_maps) > 1:
+                    raise APIMapAmbiguousError(db_maps)
+                elif db_maps:
+                    db_map = db_maps[0]
 
         course_id = course_name = tier = pro_tier = None
         if db_map is not None:

@@ -116,7 +116,7 @@ class API(ABC):
 
     @abstractmethod
     async def get_map(self, name: str, mode: Mode, course: str | None=None,
-                      bonus: int | None=None) -> APIMap:
+                      bonus: int | None=None, search: bool=False) -> APIMap:
         ...
 
     @abstractmethod
