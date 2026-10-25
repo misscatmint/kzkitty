@@ -279,7 +279,7 @@ async def server_component(server: a2s.Server, api: API | None,
             str(a2s.Game.CS2): 'CS2'}.get(server.game, server.game)
     body = f"""## {server.name} ({game})
 
-**IP**: `connect {server.host}{port}`"""
+**IP**: {server.host}{port}"""
     if location:
         body += f' ({location})'
     body += f"""
