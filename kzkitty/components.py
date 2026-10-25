@@ -12,7 +12,7 @@ from hikari.impl import (ContainerComponentBuilder,
 from kzkitty.api import a2s
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
-from kzkitty.models import Mode
+from kzkitty.models import Mode, Type
 if TYPE_CHECKING:
     from kzkitty.models import Player, Server
 
@@ -76,43 +76,50 @@ def _map_color(api_map: APIMap) -> int:
                 5: 0xfd7e14, 6: 0xe74c3c, 7: 0xc52412, 8: 0xd22ce5,
                 9: 0x555555, 10: 0x000000}.get(api_map.tier or 0, 0xcccccc)
 
-def _map_info(api_map: APIMap, pro: bool | None=None,
-              include_course: bool=True) -> str:
-
-    extra = ''
-    if include_course:
-        if api_map.bonus is not None:
-            extra = f'**Bonus**: {api_map.bonus}'
-        elif api_map.course is not None:
-            extra = f'**Course**: {api_map.course}'
-
-    # Show nicer looking mode names where possible
+def _short_tier_info(api_map: APIMap) -> str | None:
     mode = {Mode.VNL2: Mode.VNL}.get(api_map.mode, api_map.mode)
+    if (api_map.tier is not None and api_map.pro_tier is not None and
+        api_map.tier != api_map.pro_tier):
+        return f'{mode} T{api_map.tier}/T{api_map.pro_tier}'
+    elif api_map.tier is not None:
+        return f'{mode} T{api_map.tier}'
+    return None
 
-    if (pro is None and api_map.tier is not None and
+def _tier_info(api_map: APIMap, tp_type: Type=Type.ANY) -> str | None:
+    mode = {Mode.VNL2: Mode.VNL}.get(api_map.mode, api_map.mode)
+    if (tp_type == Type.ANY and api_map.tier is not None and
         api_map.pro_tier is not None and api_map.tier != api_map.pro_tier):
-        extra += f"""
-**Tier**: {api_map.tier} - {api_map.tier_name} ({mode} TP) / """
-        extra += f'{api_map.pro_tier} - {api_map.pro_tier_name} ({mode} PRO)'
+        info = f'**TP Tier**: {api_map.tier} - {api_map.tier_name} ({mode})'
+        info += f"""
+**PRO Tier**: {api_map.pro_tier} - {api_map.pro_tier_name} ({mode})"""
+        return info
+    if tp_type == Type.PRO and api_map.pro_tier is not None:
+        tier: int | None = api_map.pro_tier
+        tier_name: str | None = api_map.pro_tier_name
     else:
-        if pro and api_map.pro_tier is not None:
-            tier: int | None = api_map.pro_tier
-            tier_name: str | None = api_map.pro_tier_name
-        else:
-            tier = api_map.tier
-            tier_name = api_map.tier_name
-        if tier is not None:
-            extra += f"""
-**Tier**: {tier} - {tier_name} ({mode})"""
-        elif api_map.bonus is None:
-            extra += """
-**Tier**: (unknown)"""
-    return extra
+        tier = api_map.tier
+        tier_name = api_map.tier_name
+    if tier is not None:
+        return f'**Tier**: {tier} - {tier_name} ({mode})'
+    else:
+        return None
+
+def _map_info(api_map: APIMap, tp_type: Type=Type.ANY) -> str:
+    info = ''
+    if api_map.bonus is not None:
+        info += f'**Bonus**: {api_map.bonus}'
+    elif api_map.course is not None:
+        info += f'**Course**: {api_map.course}'
+    tier_info = _tier_info(api_map, tp_type)
+    if tier_info is not None:
+        info += f"""
+{tier_info}"""
+    return info
 
 async def pb_component(pb: PersonalBest, player: Player, user: User
                        ) -> ContainerComponentBuilder:
     player_name = pb.player_name or user.display_name
-    map_info = _map_info(pb.map, pb.teleports == 0)
+    map_info = _map_info(pb.map, Type.PRO if pb.teleports == 0 else Type.TP)
 
     if pb.place is not None:
         medal = {1: ':first_place:', 2: ':second_place:',
@@ -219,34 +226,30 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest] | None
 
 {map_info}
 """
+
     if api_map.has_tp_wrs:
-        tp_pb = pro_pb = None
         if wrs is not None:
-            tp_pb_time = pro_pb_time = '(none)'
+            tp_pb = pro_pb = None
             for pb in wrs:
                 if pb.teleports == 0:
                     pro_pb = pb
                 else:
                     tp_pb = pb
+            tp_pb_time = pro_pb_time = '(none)'
             if tp_pb is not None:
                 tp_pb_time = _wr_time(tp_pb)
             if pro_pb is not None:
                 pro_pb_time = _wr_time(pro_pb)
         else:
             tp_pb_time = pro_pb_time = '(unknown)'
-        body += f"""**WR** (TP): {tp_pb_time}
-**WR** (PRO): {pro_pb_time}
+        body += f"""**TP WR**: {tp_pb_time}
+**PRO WR**: {pro_pb_time}
 """
     elif wrs:
         wrs.sort(key=lambda pb: pb.time)
         pb = wrs[0]
-        overall_type = 'PRO' if pb.teleports == 0 else 'TP'
-        body += f"""**WR** ({overall_type}): {_wr_time(pb)}
-"""
-        pro_pbs = [pb for pb in wrs if pb.teleports == 0]
-        if pro_pbs and pb not in pro_pbs:
-            pro_pb = pro_pbs[0]
-            body += f"""**WR** (PRO): {_wr_time(pro_pb)}
+        pb_type = 'PRO' if pb.teleports == 0 else 'TP'
+        body += f"""**WR**: {_wr_time(pb)} ({pb_type})
 """
     elif wrs is not None:
         body += """**WR**: (none)
@@ -282,7 +285,9 @@ async def server_component(server: a2s.Server, api: API | None,
     body += f"""
 **Map**: {map_name}"""
     if api_map is not None:
-        body += _map_info(api_map, include_course=False)
+        tier = _short_tier_info(api_map)
+        if tier is not None:
+            body += f' ({tier})'
     body += f"""
 **Players**: {server.player_count}/{server.max_players}"""
     for player in server.players:
