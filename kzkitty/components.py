@@ -307,11 +307,13 @@ async def server_component(server: a2s.Server, api: API | None,
         thumbnail_url = await api.get_workshop_thumbnail_url(server.map_name)
 
     container = ContainerComponentBuilder()
-    container.add_text_display(body)
     if thumbnail_url is not None:
-        gallery = MediaGalleryComponentBuilder()
-        gallery.add_media_gallery_item(thumbnail_url)
-        container.add_component(gallery)
+        thumbnail = ThumbnailComponentBuilder(media=thumbnail_url)
+        section = SectionComponentBuilder(accessory=thumbnail)
+        section.add_text_display(body)
+        container.add_component(section)
+    else:
+        container.add_text_display(body)
     container.add_text_display(f'-# <t:{int(result_time.timestamp())}>')
     return container
 
