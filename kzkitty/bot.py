@@ -211,9 +211,9 @@ async def _get_player(ctx: _Context, player_member: Member | None=None
     except DoesNotExist:
         raise _PlayerNotFound
 
-async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
-                   course: str | None=None, bonus: int | None=None
-                   ) -> tuple[API, APIMap]:
+async def _get_map(mode: Mode, map_name: str, course: str | None=None,
+                   bonus: int | None=None, fallback: bool=True,
+                   impossible_fallback: bool=True) -> tuple[API, APIMap]:
     """Look up a map/course/bonus for a given mode.
 
     If the user hasn't explicitly chosen a specific mode, this will fall back
@@ -223,7 +223,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     try:
         api_map = await api.get_map(map_name, mode, course, bonus)
     except (APIHTTPError, APIMapNotFoundError) as e:
-        if mode_name is not None:
+        if not fallback:
             raise
         mode = {Mode.KZT: Mode.CKZ,
                 Mode.SKZ: Mode.CKZ,
@@ -242,7 +242,7 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
     # Note that on CSGO impossible is None for bonuses as we can't easily get
     # map record filters for all bonuses from the API. Automatic fallback
     # therefore isn't possible in this case.
-    if mode_name is None and api_map.impossible:
+    if api_map.impossible and impossible_fallback:
         old_mode = mode
         if api_map.name.startswith('vnl_'):
             mode = Mode.VNL
@@ -267,14 +267,16 @@ async def _get_map(mode: Mode, mode_name: str | None, map_name: str,
 
     return api, api_map
 
-async def _get_server_map(server: a2s.Server) -> tuple[API | None,
-                                                       APIMap | None]:
+async def _get_server_map(server: a2s.Server, mode: Mode | None
+                          ) -> tuple[API | None, APIMap | None]:
     api = api_map = None
-    mode = ({a2s.Game.CSGO: Mode.KZT, a2s.Game.CS2: Mode.CKZ}
-            .get(cast('a2s.Game', server.game)))
+    if mode is None:
+        mode = ({a2s.Game.CSGO: Mode.KZT, a2s.Game.CS2: Mode.CKZ}
+                .get(cast('a2s.Game', server.game)))
     if mode is not None:
         with contextlib.suppress(APIMapNotFoundError):
-            api, api_map = await _get_map(mode, Mode.KZT, server.map_name)
+            api, api_map = await _get_map(mode, server.map_name,
+                                          fallback=False)
         if api is None:
             api = api_for_mode(mode)
     return api, api_map
@@ -360,7 +362,9 @@ async def _slash_pb(ctx: _Context, map_name: _MapOption,
     """Look up a personal best time"""
     player = await _get_player(ctx, player_member)
     mode = player.mode if mode_name is None else Mode(mode_name)
-    api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
+    fallback = impossible_fallback = mode_name is None
+    api, api_map = await _get_map(mode, map_name, course, bonus, fallback,
+                                  impossible_fallback)
     pb = await api.get_pb(player.steamid64, api_map, Type(type_name))
     if not pb:
         await ctx.respond('No times found', flags=MessageFlag.EPHEMERAL)
@@ -400,7 +404,9 @@ async def _slash_map(ctx: _Context, map_name: _MapOption,
         else:
             mode = player.mode
 
-    api, api_map = await _get_map(mode, mode_name, map_name, course, bonus)
+    fallback = impossible_fallback = mode_name is None
+    api, api_map = await _get_map(mode, map_name, course, bonus, fallback,
+                                  impossible_fallback)
     wrs = await api.get_wrs(api_map)
     component = map_component(api_map, wrs)
     await ctx.respond(component=component)
@@ -433,11 +439,16 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
             return
         address = db_server.address
         location: str | None = db_server.location
+        preferred_mode: Mode | None = db_server.preferred_mode
     else:
         db_server = (await Server.filter(server_id=ctx.guild_id,
                                          address=address)
                                  .first())
-        location = db_server.location if db_server is not None else None
+        if db_server is not None:
+            location = db_server.location
+            preferred_mode = db_server.preferred_mode
+        else:
+            location = preferred_mode = None
 
     try:
         host, port = a2s.parse_address(address)
@@ -454,7 +465,7 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         await ctx.respond('Invalid address', flags=MessageFlag.EPHEMERAL)
         return
 
-    api, api_map = await _get_server_map(server)
+    api, api_map = await _get_server_map(server, preferred_mode)
     component = await server_component(server, api, api_map,
                                        location=location)
     await ctx.respond(component=component)
@@ -512,7 +523,7 @@ async def _refresh_server(message: Message, db_server: Server) -> None:
         component = server_unavailable_component(db_server,
                                                  'Invalid server address')
     else:
-        api, api_map = await _get_server_map(server)
+        api, api_map = await _get_server_map(server, db_server.preferred_mode)
         component = await server_component(server, api, api_map,
                                            location=db_server.location)
     await message.edit(component=component)

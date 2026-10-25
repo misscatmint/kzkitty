@@ -59,6 +59,7 @@ class Server(Model):
     name = fields.CharField(max_length=255)
     address = fields.CharField(max_length=255)
     game = fields.CharEnumField(Game)
+    preferred_mode = fields.CharEnumField(Mode, null=True)
     location = fields.CharField(max_length=255)
     server_id: fields.Field[int] = fields.BigIntField()
     channel_id: fields.Field[int | None] = fields.BigIntField(null=True)
@@ -109,6 +110,7 @@ async def _import_default_servers() -> None:
             address = row['address']
             location = row['location']
             game = row['game']
+            preferred_mode = row['preferred_mode'] or None
             server_id = int(row['server_id'])
             channel_id = int(row['channel_id']) if row['channel_id'] else None
             message_id = int(row['message_id']) if row['message_id'] else None
@@ -116,6 +118,7 @@ async def _import_default_servers() -> None:
             if not await Server.exists(address=address, server_id=server_id):
                 servers.append(Server(name=name, address=address,
                                       location=location, game=game,
+                                      preferred_mode=preferred_mode,
                                       server_id=server_id,
                                       channel_id=channel_id,
                                       message_id=message_id,
