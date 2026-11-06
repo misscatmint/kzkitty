@@ -435,7 +435,7 @@ class CSGOAPI(API):
                 else:
                     tier = vnl_tier
                     pro_tier = vnl_pro_tier
-                impossible = (tier == 10 and pro_tier == 10
+                impossible = (tier > 8 and pro_tier > 8
                               if tier is not None and pro_tier is not None
                               else None)
             elif (name.startswith('vnl_') or

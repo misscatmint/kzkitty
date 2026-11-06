@@ -365,6 +365,9 @@ class CS2API(API):
 
         tier_name = _tier_name(tier)
         pro_tier_name = _tier_name(pro_tier)
+        impossible = (tier > 8 and pro_tier > 8
+                      if tier is not None and pro_tier is not None
+                      else None)
 
         url = f'https://cs2kz.org/maps/{quote(name)}'
         if mode == Mode.VNL2:
@@ -377,8 +380,7 @@ class CS2API(API):
                       course=course_name, tier=tier, tier_name=tier_name,
                       pro_tier=pro_tier, pro_tier_name=pro_tier_name,
                       max_tier=10, has_tp_wrs=False, url=url,
-                      impossible=tier == 10 and pro_tier == 10,
-                      thumbnail_url=thumbnail_url)
+                      impossible=impossible, thumbnail_url=thumbnail_url)
 
     @override
     async def get_workshop_thumbnail_url(self, name: str) -> str | None:
