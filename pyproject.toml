@@ -3,7 +3,7 @@ name = "kzkitty"
 version = "0.1.0"
 description = "Discord bot for the CS:GO and CS2 KZ global APIs."
 readme = "README.md"
-requires-python = ">=3.15.1"
+requires-python = ">=3.15.2"
 dependencies = [
     "hikari-arc[rest]>=2.3.2",
     "hikari[server]>=2.6.0",
