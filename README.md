@@ -51,9 +51,11 @@ name,address,game,location,server_id,channel_id,message_id,is_default
 ...
 ```
 
-Setting `channel_id` and `message_id` will make the bot generate auto-updating
-server status messages. `is_default` controls what server `/server` uses by
-default.
+Setting `channel_id` will make the bot keep one auto-updating status message
+in that channel, covering every server with that `channel_id`. Set
+`message_id` on any of those rows to reuse an existing message instead of
+posting a new one. Rows for the same channel can't have different
+`message_id`s. `is_default` controls what server `/server` uses by default.
 
 `KZKITTY_REFRESH_DB_HOURS` can optionally be used to control how frequently
 the map cache is updated from the global APIs. The default is 24 hours.

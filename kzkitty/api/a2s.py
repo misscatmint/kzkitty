@@ -3,10 +3,13 @@ import ipaddress
 import posixpath
 import socket
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
 from little_a2s import AsyncA2S, Error as A2SError
+from pydantic import JsonValue, TypeAdapter, ValidationError
+
+type ServerData = dict[str, JsonValue]
 
 class QueryError(Exception):
     pass
@@ -18,6 +21,9 @@ class QueryTimeoutError(QueryError):
     pass
 
 class QueryA2SError(QueryError):
+    pass
+
+class ServerDataError(Exception):
     pass
 
 class Game(StrEnum):
@@ -41,6 +47,20 @@ class Server:
     player_count: int
     max_players: int
     players: list[Player]
+    queried_at: datetime
+
+    def to_dict(self) -> ServerData:
+        data: ServerData = _ServerAdapter.dump_python(self, mode='json')
+        return data
+
+    @classmethod
+    def from_dict(cls, data: ServerData) -> Server:
+        try:
+            return _ServerAdapter.validate_python(data)
+        except ValidationError as e:
+            raise ServerDataError from e
+
+_ServerAdapter = TypeAdapter(Server)
 
 async def _resolve_address(host: str, port: int) -> tuple[str, int]:
     loop = asyncio.get_running_loop()
@@ -102,4 +122,4 @@ async def query_server(host: str, port: int | None, timeout: float | None=None
                   full_map_name=info.map,
                   map_name=posixpath.basename(info.map),
                   player_count=info.players, max_players=info.max_players,
-                  players=players)
+                  players=players, queried_at=datetime.now(tz=UTC))

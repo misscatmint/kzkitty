@@ -5,7 +5,7 @@ import contextlib
 import logging
 from typing import Annotated, Any, TYPE_CHECKING, cast
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from collections.abc import Coroutine, Sequence
 
 from arc import (AutocompleteData, AutodeferMode, Context, GatewayClient,
                  IntParams, MemberParams, RESTClient, StrParams,
@@ -30,13 +30,14 @@ from kzkitty.api.steam import (SteamError, SteamProfileNotFound,
 from kzkitty.components import (map_component, pb_component,
                                 profile_component, server_component,
                                 server_unavailable_component)
-from kzkitty.models import (Course, Map, Mode, Player, Server, Type, close_db,
-                            import_defaults, init_db)
+from kzkitty.models import (Course, Map, Mode, Player, Server, ServerMessage,
+                            Type, close_db, import_defaults, init_db)
 
 type _Client = Client[Any]
 type _Context = Context[Any]
 
 _SERVER_MESSAGE_SLACK = 5
+_SERVER_DOWN_FAILURES = 5
 
 _logger = logging.getLogger('kzkitty.bot')
 
@@ -493,89 +494,119 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
                                        location=location)
     await ctx.respond(component=component)
 
-async def _refresh_server_message(client: _Client, db_server: Server,
-                                  component: ComponentBuilder) -> None:
-    """Create/update a status message for a server"""
-    if db_server.channel_id is None:
-        return
-
+async def _update_server_message(client: _Client, db_message: ServerMessage,
+                                 components: Sequence[ComponentBuilder]
+                                 ) -> None:
+    """Create/update a status message"""
     message = None
-    if db_server.message_id is not None:
+    if db_message.message_id is not None:
         try:
-            message = await client.rest.fetch_message(db_server.channel_id,
-                                                      db_server.message_id)
+            message = await client.rest.fetch_message(db_message.channel_id,
+                                                      db_message.message_id)
         except ForbiddenError:
             _logger.info('server message %s in channel %s forbidden',
-                         db_server.message_id, db_server.channel_id)
+                         db_message.message_id, db_message.channel_id)
             return
         except NotFoundError:
             _logger.info('server message %s in channel %s not found',
-                         db_server.message_id, db_server.channel_id)
+                         db_message.message_id, db_message.channel_id)
 
     if message is None:
         try:
             message = await client.rest.create_message(
-                channel=db_server.channel_id, component=component)
+                channel=db_message.channel_id, components=components)
         except ForbiddenError:
             _logger.info('creating server message in channel %s forbidden',
-                         db_server.channel_id)
+                         db_message.channel_id)
             return
         except NotFoundError:
             _logger.info('server message channel %s not found',
-                         db_server.channel_id)
+                         db_message.channel_id)
             return
-        db_server.message_id = int(message.id)
-        await db_server.save(update_fields=['message_id'])
+        db_message.message_id = int(message.id)
+        await db_message.save(update_fields=['message_id'])
     else:
         try:
-            await message.edit(component=component)
+            await message.edit(components=components)
         except ForbiddenError:
             _logger.info('editing server message %s in channel %s forbidden',
-                         message.id, db_server.channel_id)
+                         message.id, db_message.channel_id)
         except NotFoundError:
             _logger.info('server message %s channel %s not found',
-                         message.id, db_server.channel_id)
+                         message.id, db_message.channel_id)
 
-async def _refresh_server(client: _Client, db_server: Server, delay: float,
-                          timeout: float) -> None:
-    """Query a server and update its status message"""
-    await asyncio.sleep(delay)
-    try:
-        await db_server.refresh_from_db()
-    except DoesNotExist:
-        return
-    if db_server.channel_id is None:
-        return
+async def _query_server(db_server: Server, timeout: float) -> a2s.Server:
+    """Query a server, falling back to its last result until it counts as down.
 
+    The query's exception propagates if there's no result to fall back to.
+    """
     try:
         host, port = a2s.parse_address(db_server.address)
         server = await a2s.query_server(host, port, timeout)
-    except a2s.QueryA2SError:
-        _logger.exception('a2s query failed for %s', db_server.address)
-        component = server_unavailable_component(db_server,
-                                                 'Server query failed')
-    except a2s.QueryInvalidAddressError:
-        component = server_unavailable_component(db_server,
-                                                 'Invalid server address')
-    except a2s.QueryTimeoutError:
-        _logger.info('a2s query to %s timed out', db_server.address)
-        return
-    else:
+    except Exception as e:
+        expected = isinstance(e, a2s.QueryInvalidAddressError
+                              | a2s.QueryTimeoutError)
+        _logger.info('a2s query to %s failed: %r', db_server.address, e,
+                     exc_info=not expected)
+        db_server.failure_count += 1
+        await db_server.save(update_fields=['failure_count'])
+        if (db_server.last_query is None
+            or db_server.failure_count >= _SERVER_DOWN_FAILURES):
+            raise
+        return a2s.Server.from_dict(db_server.last_query)
+
+    db_server.last_query = server.to_dict()
+    db_server.failure_count = 0
+    await db_server.save(update_fields=['last_query', 'failure_count'])
+    return server
+
+async def _refresh_server(db_server: Server, timeout: float
+                          ) -> ComponentBuilder:
+    """Query a server and build its status component"""
+    try:
+        server = await _query_server(db_server, timeout)
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
-        component = await server_component(server, api, api_map,
-                                           location=db_server.location)
-    await _refresh_server_message(client, db_server, component)
+        return await server_component(server, api, api_map,
+                                      location=db_server.location,
+                                      truncate=True)
+    except a2s.QueryInvalidAddressError:
+        reason = 'Invalid server address'
+    except a2s.QueryTimeoutError:
+        reason = 'Server query timed out'
+    except Exception:
+        # Anything raised here would stop the other servers' updates too.
+        _logger.exception('Refreshing %s failed', db_server.address)
+        reason = 'Server query failed'
+    return server_unavailable_component(db_server, reason)
+
+async def _refresh_server_message(client: _Client, db_message: ServerMessage,
+                                  delay: float, timeout: float) -> None:
+    """Query a status message's servers and update the message"""
+    await asyncio.sleep(delay)
+    try:
+        await db_message.refresh_from_db()
+    except DoesNotExist:
+        return
+    db_servers = await (Server.filter(status_message=db_message)
+                              .order_by('id'))
+    if not db_servers:
+        return
+
+    components = await asyncio.gather(*(_refresh_server(s, timeout)
+                                        for s in db_servers))
+    await _update_server_message(client, db_message, components)
 
 async def _refresh_servers(client: _Client, interval: float, timeout: float
                            ) -> None:
     """Queue server status message updates"""
-    db_servers = await Server.filter(channel_id__isnull=False)
+    db_messages = await ServerMessage.all()
     spread = interval - (timeout + _SERVER_MESSAGE_SLACK)
-    step = spread / max(len(db_servers), 1)
-    for i, db_server in enumerate(db_servers):
+    step = spread / max(len(db_messages), 1)
+    for i, db_message in enumerate(db_messages):
         delay = i * step
-        _create_task(_refresh_server(client, db_server, delay, timeout),
-                     name=f'refresh server {db_server.address}')
+        _create_task(_refresh_server_message(client, db_message, delay,
+                                             timeout),
+                     name=f'refresh server message {db_message.channel_id}')
 
 async def _refresh_server_loop(client: _Client, interval: float,
                                timeout: float) -> None:

@@ -3,8 +3,11 @@ import logging
 import os
 import sys
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from tortoise import Model, Tortoise, fields
+if TYPE_CHECKING:
+    from kzkitty.api.a2s import ServerData
 
 _logger = logging.getLogger('kzkitty.models')
 
@@ -55,6 +58,10 @@ class Game(StrEnum):
     CSGO = 'CSGO'
     CS2 = 'CS2'
 
+class ServerMessage(Model):
+    channel_id: fields.Field[int] = fields.BigIntField()
+    message_id: fields.Field[int | None] = fields.BigIntField(null=True)
+
 class Server(Model):
     name = fields.CharField(max_length=255)
     address = fields.CharField(max_length=255)
@@ -62,9 +69,13 @@ class Server(Model):
     preferred_mode = fields.CharEnumField(Mode, null=True)
     location = fields.CharField(max_length=255)
     server_id: fields.Field[int] = fields.BigIntField()
-    channel_id: fields.Field[int | None] = fields.BigIntField(null=True)
-    message_id: fields.Field[int | None] = fields.BigIntField(null=True)
+    status_message: fields.ForeignKeyNullableRelation[ServerMessage] = (
+        fields.ForeignKeyField('models.ServerMessage', related_name='servers',
+                               null=True, on_delete=fields.SET_NULL))
     is_default = fields.BooleanField(default=False)
+    failure_count = fields.IntField(default=0)
+    last_query: fields.JSONField[ServerData | None] = (
+        fields.JSONField(null=True))
 
     class Meta: # pyright: ignore # pyrefly: ignore # ty: ignore
         unique_together = ('address', 'server_id')
@@ -97,6 +108,20 @@ async def _import_default_players() -> None:
         _logger.info('Imported %d player(s) from %s', len(users),
                      default_player_file)
 
+async def _status_message_for_channel(channel_id: int, message_id: int | None
+                                      ) -> ServerMessage:
+    db_message = await ServerMessage.filter(channel_id=channel_id).first()
+    if db_message is None:
+        return await ServerMessage.create(channel_id=channel_id,
+                                          message_id=message_id)
+    if message_id is None or message_id == db_message.message_id:
+        return db_message
+    if db_message.message_id is not None:
+        raise ValueError(f'Conflicting message IDs for channel {channel_id}')
+    db_message.message_id = message_id
+    await db_message.save(update_fields=['message_id'])
+    return db_message
+
 async def _import_default_servers() -> None:
     default_server_file = os.environ.get('KZKITTY_DEFAULT_SERVERS')
     if default_server_file is None:
@@ -116,12 +141,14 @@ async def _import_default_servers() -> None:
             message_id = int(row['message_id']) if row['message_id'] else None
             is_default = bool(int(row['is_default']))
             if not await Server.exists(address=address, server_id=server_id):
+                status_message = (
+                    await _status_message_for_channel(channel_id, message_id)
+                    if channel_id is not None else None)
                 servers.append(Server(name=name, address=address,
                                       location=location, game=game,
                                       preferred_mode=preferred_mode,
                                       server_id=server_id,
-                                      channel_id=channel_id,
-                                      message_id=message_id,
+                                      status_message=status_message,
                                       is_default=is_default))
     await Server.bulk_create(servers)
     if servers:

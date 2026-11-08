@@ -16,6 +16,9 @@ from kzkitty.models import Mode, Type
 if TYPE_CHECKING:
     from kzkitty.models import Player, Server
 
+_STATUS_MAX_PLAYERS = 10
+_STATUS_MAX_PLAYER_NAME = 20
+
 _logger = logging.getLogger('kzkitty.components')
 
 async def _avatar_url(player: Player) -> str | None:
@@ -267,9 +270,9 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest] | None
     return container
 
 async def server_component(server: a2s.Server, api: API | None,
-                           api_map: APIMap | None, location: str | None=None
+                           api_map: APIMap | None, location: str | None=None,
+                           truncate: bool=False
                            ) -> ContainerComponentBuilder:
-    result_time = datetime.now(tz=UTC)
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
     else:
@@ -290,15 +293,21 @@ async def server_component(server: a2s.Server, api: API | None,
             body += f' ({tier})'
     body += f"""
 **Players**: {server.player_count}/{server.max_players}"""
-    for player in server.players:
-        if not player.name:
-            # The server likely isn't sending player names, so just include
-            # these players in the player count.
-            continue
+    # If the server isn't sending player names, just include these players in
+    # the player count.
+    players = [p for p in server.players if p.name]
+    shown = players[:_STATUS_MAX_PLAYERS] if truncate else players
+    for player in shown:
+        name = player.name
+        if truncate and len(name) > _STATUS_MAX_PLAYER_NAME:
+            name = f'{name[:_STATUS_MAX_PLAYER_NAME - 1]}…'
         player_time = _formattime(player.duration, microseconds=False,
                                   force_minutes=True)
         body += f"""
-- {player.name} ({player_time})"""
+- {name} ({player_time})"""
+    if len(shown) < len(players):
+        body += f"""
+- +{len(players) - len(shown)} more"""
 
     thumbnail_url = None
     if api_map is not None:
@@ -314,7 +323,7 @@ async def server_component(server: a2s.Server, api: API | None,
         container.add_component(section)
     else:
         container.add_text_display(body)
-    container.add_text_display(f'-# <t:{int(result_time.timestamp())}>')
+    container.add_text_display(f'-# <t:{int(server.queried_at.timestamp())}>')
     return container
 
 def server_unavailable_component(db_server: Server, reason: str
