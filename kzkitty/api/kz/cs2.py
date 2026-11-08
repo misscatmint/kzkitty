@@ -131,8 +131,10 @@ class CS2API(API):
     game = Game.CS2
 
     @override
-    def __init__(self, timeout: int | None=None) -> None:
+    def __init__(self, timeout: int | None=None,
+                 slow_timeout: int | None=None) -> None:
         self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
+        self._slow_timeout = slow_timeout
 
     @override
     async def close(self) -> None:
@@ -151,7 +153,8 @@ class CS2API(API):
     async def refresh_map_db(self) -> RefreshMapDBResult:
         url = 'https://api.cs2kz.org/maps'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._session.request('GET', url,
+                                            timeout=self._slow_timeout)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API maps "
                                    f'(HTTP {r.status})')

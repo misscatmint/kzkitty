@@ -10,8 +10,9 @@ from kzkitty.models import (close_db, dump_players, export_default_players,
 
 _logger = logging.getLogger('kzkitty')
 
-async def _refresh(db_url: str, api_timeout: int) -> None:
-    init_api(timeout=api_timeout)
+async def _refresh(db_url: str, api_timeout: int, api_slow_timeout: int
+                   ) -> None:
+    init_api(timeout=api_timeout, slow_timeout=api_slow_timeout)
     await init_db(db_url)
     try:
         await refresh_map_db()
@@ -35,7 +36,8 @@ async def _dump(db_url: str) -> None:
 
 def main(args: list[str]) -> None:
     db_url = os.environ['KZKITTY_DB']
-    api_timeout = int(os.environ.get('KZKITTY_API_TIMEOUT', 15))
+    api_timeout = int(os.environ.get('KZKITTY_API_TIMEOUT', 3))
+    api_slow_timeout = int(os.environ.get('KZKITTY_API_SLOW_TIMEOUT', 15))
 
     try:
         import uvloop
@@ -49,7 +51,7 @@ def main(args: list[str]) -> None:
     if args:
         if args[0] == 'refresh':
             logging.basicConfig(level=logging.INFO)
-            asyncio.run(_refresh(db_url, api_timeout))
+            asyncio.run(_refresh(db_url, api_timeout, api_slow_timeout))
             return
         elif args[0] == 'default':
             asyncio.run(_default(db_url))
@@ -68,10 +70,11 @@ def main(args: list[str]) -> None:
     if rest:
         host, port = rest.split(':', 1)
         runrest(host, int(port), discord_token, db_url, refresh_db_hours,
-                refresh_server_mins, api_timeout, steam_timeout, a2s_timeout)
+                refresh_server_mins, api_timeout, api_slow_timeout,
+                steam_timeout, a2s_timeout)
     else:
         run(discord_token, db_url, refresh_db_hours, refresh_server_mins,
-            api_timeout, steam_timeout, a2s_timeout)
+            api_timeout, api_slow_timeout, steam_timeout, a2s_timeout)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

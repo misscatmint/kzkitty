@@ -105,7 +105,8 @@ class API(ABC):
     game: ClassVar[Game]
 
     @abstractmethod
-    def __init__(self, timeout: int | None=None) -> None:
+    def __init__(self, timeout: int | None=None,
+                 slow_timeout: int | None=None) -> None:
         ...
 
     @abstractmethod
