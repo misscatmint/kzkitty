@@ -604,7 +604,7 @@ async def _refresh_server_message(client: _Client, db_message: ServerMessage,
     if not db_servers:
         return
 
-    games = [g for g in Game if g in {s.game for s in db_servers}]
+    games = list(Game)
     server_components, api_statuses = await asyncio.gather(
         asyncio.gather(*(_refresh_server(s) for s in db_servers)),
         asyncio.gather(*(api_for_game(g).is_up() for g in games)))
