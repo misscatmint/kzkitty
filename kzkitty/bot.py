@@ -308,6 +308,14 @@ async def _get_server_map(server: QueryServer, mode: Mode | None
             api = api_for_mode(mode)
     return api, api_map
 
+async def _api_is_up(game: Game) -> bool:
+    api = api_for_game(game)
+    try:
+        return await api.is_up()
+    except Exception:
+        _logger.exception('Checking the %s API failed', game)
+        return False
+
 async def _handle_error(ctx: _Context, exc: Exception) -> None:
     """Turn certain exceptions into friendly error messages.
 
@@ -500,7 +508,7 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         return
 
     api, api_map = await _get_server_map(server, preferred_mode)
-    api_up = await api.is_up() if api is not None else None
+    api_up = await _api_is_up(api.game) if api is not None else None
     component = await server_component(server, api, api_map,
                                        location=location, show_time=False,
                                        api_up=api_up)
@@ -592,7 +600,9 @@ async def _refresh_server(db_server: Server) -> ComponentBuilder:
     return server_unavailable_component(db_server, reason)
 
 async def _refresh_server_message(client: _Client, db_message: ServerMessage,
-                                  delay: float) -> None:
+                                  delay: float,
+                                  api_statuses: list[tuple[Game, bool]]
+                                  ) -> None:
     """Query a status message's servers and update the message"""
     await asyncio.sleep(delay)
     try:
@@ -604,23 +614,25 @@ async def _refresh_server_message(client: _Client, db_message: ServerMessage,
     if not db_servers:
         return
 
-    games = list(Game)
-    server_components, api_statuses = await asyncio.gather(
-        asyncio.gather(*(_refresh_server(s) for s in db_servers)),
-        asyncio.gather(*(api_for_game(g).is_up() for g in games)))
-    status = api_status_component(list(zip(games, api_statuses, strict=True)))
+    server_components = await asyncio.gather(*(_refresh_server(s)
+                                               for s in db_servers))
+    status = api_status_component(api_statuses)
     await _update_server_message(client, db_message,
                                  [*server_components, status])
 
 async def _refresh_servers(client: _Client, interval: float) -> None:
     """Queue server status message updates"""
     db_messages = await ServerMessage.all()
+    games = list(Game)
+    are_up = await asyncio.gather(*(_api_is_up(g) for g in games))
+    api_statuses = list(zip(games, are_up, strict=True))
     timeout = get_a2s().timeout or 0
     spread = interval - (timeout + _SERVER_MESSAGE_SLACK)
     step = spread / max(len(db_messages), 1)
     for i, db_message in enumerate(db_messages):
         delay = i * step
-        _create_task(_refresh_server_message(client, db_message, delay),
+        _create_task(_refresh_server_message(client, db_message, delay,
+                                             api_statuses),
                      name=f'refresh server message {db_message.channel_id}')
 
 async def _refresh_server_loop(client: _Client, interval: float) -> None:
