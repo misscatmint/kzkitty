@@ -95,7 +95,10 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
         init_a2s(timeout=a2s_timeout)
         init_steam(timeout=steam_timeout)
         await init_db(db_url)
-        _create_task(import_defaults(), name='import defaults')
+        try:
+            await import_defaults()
+        except Exception:
+            _logger.exception('Importing defaults failed')
         refresh_db_loop.start()
         refresh_servers_loop.start(client, refresh_server_mins * 60)
     client.add_startup_hook(startup)
