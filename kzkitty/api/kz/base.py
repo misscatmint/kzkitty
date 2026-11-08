@@ -10,7 +10,7 @@ from kzkitty.models import Map, Mode, Type
 class APIError(Exception):
     pass
 
-class APIUnitializedError(APIError):
+class APIUninitializedError(APIError):
     pass
 
 class APIHTTPError(APIError):

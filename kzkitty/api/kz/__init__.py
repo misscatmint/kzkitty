@@ -2,7 +2,7 @@ import logging
 
 from kzkitty.api.kz.base import (API, APIDataError, APIError, APIHTTPError,
                                  APIMap, APIMapAmbiguousError, APIMapError,
-                                 APIMapNotFoundError, APIUnitializedError,
+                                 APIMapNotFoundError, APIUninitializedError,
                                  Rank, PersonalBest, Profile)
 from kzkitty.api.kz.csgo import CSGOAPI
 from kzkitty.api.kz.cs2 import CS2API
@@ -35,7 +35,7 @@ async def close_api() -> None:
 
 def api_for_mode(mode: Mode) -> API:
     if _csgo_api is None or _cs2_api is None:
-        raise APIUnitializedError
+        raise APIUninitializedError
     if mode in {Mode.KZT, Mode.SKZ, Mode.VNL}:
         return _csgo_api
     else:
@@ -43,7 +43,7 @@ def api_for_mode(mode: Mode) -> API:
 
 async def refresh_map_db() -> None:
     if _csgo_api is None or _cs2_api is None:
-        raise APIUnitializedError
+        raise APIUninitializedError
 
     new = updated = deleted = 0
     _logger.info('Refreshing map database')

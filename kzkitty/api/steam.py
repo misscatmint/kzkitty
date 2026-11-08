@@ -12,7 +12,7 @@ class SteamError(Exception):
 class SteamProfileNotFound(SteamError):
     pass
 
-class SteamUnitializedError(SteamError):
+class SteamUninitializedError(SteamError):
     pass
 
 class SteamValueError(SteamError):
@@ -103,5 +103,5 @@ async def close_steam() -> None:
 
 def get_steam() -> Steam:
     if _steam is None:
-        raise SteamUnitializedError
+        raise SteamUninitializedError
     return _steam
