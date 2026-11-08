@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from tortoise import Model, Tortoise, fields
 if TYPE_CHECKING:
-    from kzkitty.api.a2s import ServerData
+    from kzkitty.api.a2s import QueryServerData
 
 _logger = logging.getLogger('kzkitty.models')
 
@@ -74,7 +74,7 @@ class Server(Model):
                                null=True, on_delete=fields.SET_NULL))
     is_default = fields.BooleanField(default=False)
     failure_count = fields.IntField(default=0)
-    last_query: fields.JSONField[ServerData | None] = (
+    last_query: fields.JSONField[QueryServerData | None] = (
         fields.JSONField(null=True))
 
     class Meta: # pyright: ignore # pyrefly: ignore # ty: ignore

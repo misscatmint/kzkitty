@@ -19,7 +19,9 @@ from tortoise.expressions import Q
 if TYPE_CHECKING:
     from hikari.api import ComponentBuilder
 
-from kzkitty.api import a2s
+from kzkitty.api.a2s import (QueryA2SError, QueryGame,
+                             QueryInvalidAddressError, QueryServer,
+                             QueryTimeoutError, close_a2s, get_a2s, init_a2s)
 from kzkitty.api.kz import (API, APIError, APIHTTPError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_mode, close_api,
@@ -90,17 +92,18 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
                                         run_on_start=True)
     async def startup(client: _Client) -> None:
         init_api(timeout=api_timeout)
+        init_a2s(timeout=a2s_timeout)
         init_steam(timeout=steam_timeout)
         await init_db(db_url)
         _create_task(import_defaults(), name='import defaults')
         refresh_db_loop.start()
-        refresh_servers_loop.start(client, refresh_server_mins * 60,
-                                   a2s_timeout)
+        refresh_servers_loop.start(client, refresh_server_mins * 60)
     client.add_startup_hook(startup)
 
     async def shutdown(_: _Client) -> None:
         await close_api()
         await close_steam()
+        await close_a2s()
         await close_db()
     client.add_shutdown_hook(shutdown)
 
@@ -282,12 +285,12 @@ async def _get_map(mode: Mode, map_name: str, course: str | None=None,
 
     return api, api_map
 
-async def _get_server_map(server: a2s.Server, mode: Mode | None
+async def _get_server_map(server: QueryServer, mode: Mode | None
                           ) -> tuple[API | None, APIMap | None]:
     api = api_map = None
     if mode is None:
-        mode = ({a2s.Game.CSGO: Mode.KZT, a2s.Game.CS2: Mode.CKZ}
-                .get(cast('a2s.Game', server.game)))
+        mode = ({QueryGame.CSGO: Mode.KZT, QueryGame.CS2: Mode.CKZ}
+                .get(cast('QueryGame', server.game)))
     if mode is not None:
         try:
             with contextlib.suppress(APIMapNotFoundError):
@@ -474,18 +477,19 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         else:
             location = preferred_mode = None
 
+    a2s = get_a2s()
     try:
         host, port = a2s.parse_address(address)
         server = await a2s.query_server(host, port)
-    except a2s.QueryA2SError:
+    except QueryA2SError:
         _logger.exception('a2s query failed for %s', address)
         await ctx.respond('Server query failed', flags=MessageFlag.EPHEMERAL)
         return
-    except a2s.QueryTimeoutError:
+    except QueryTimeoutError:
         await ctx.respond('Server query timed out',
                           flags=MessageFlag.EPHEMERAL)
         return
-    except a2s.QueryInvalidAddressError:
+    except QueryInvalidAddressError:
         await ctx.respond('Invalid address', flags=MessageFlag.EPHEMERAL)
         return
 
@@ -535,17 +539,18 @@ async def _update_server_message(client: _Client, db_message: ServerMessage,
             _logger.info('server message %s channel %s not found',
                          message.id, db_message.channel_id)
 
-async def _query_server(db_server: Server, timeout: float) -> a2s.Server:
+async def _query_server(db_server: Server) -> QueryServer:
     """Query a server, falling back to its last result until it counts as down.
 
     The query's exception propagates if there's no result to fall back to.
     """
+    a2s = get_a2s()
     try:
         host, port = a2s.parse_address(db_server.address)
-        server = await a2s.query_server(host, port, timeout)
+        server = await a2s.query_server(host, port)
     except Exception as e:
-        expected = isinstance(e, a2s.QueryInvalidAddressError
-                              | a2s.QueryTimeoutError)
+        expected = isinstance(e, (QueryInvalidAddressError |
+                                  QueryTimeoutError))
         _logger.info('a2s query to %s failed: %r', db_server.address, e,
                      exc_info=not expected)
         db_server.failure_count += 1
@@ -553,25 +558,24 @@ async def _query_server(db_server: Server, timeout: float) -> a2s.Server:
         if (db_server.last_query is None
             or db_server.failure_count >= _SERVER_DOWN_FAILURES):
             raise
-        return a2s.Server.from_dict(db_server.last_query)
+        return QueryServer.from_dict(db_server.last_query)
 
     db_server.last_query = server.to_dict()
     db_server.failure_count = 0
     await db_server.save(update_fields=['last_query', 'failure_count'])
     return server
 
-async def _refresh_server(db_server: Server, timeout: float
-                          ) -> ComponentBuilder:
+async def _refresh_server(db_server: Server) -> ComponentBuilder:
     """Query a server and build its status component"""
     try:
-        server = await _query_server(db_server, timeout)
+        server = await _query_server(db_server)
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
         return await server_component(server, api, api_map,
                                       location=db_server.location,
                                       truncate=True)
-    except a2s.QueryInvalidAddressError:
+    except QueryInvalidAddressError:
         reason = 'Invalid server address'
-    except a2s.QueryTimeoutError:
+    except QueryTimeoutError:
         reason = 'Server query timed out'
     except Exception:
         # Anything raised here would stop the other servers' updates too.
@@ -580,7 +584,7 @@ async def _refresh_server(db_server: Server, timeout: float
     return server_unavailable_component(db_server, reason)
 
 async def _refresh_server_message(client: _Client, db_message: ServerMessage,
-                                  delay: float, timeout: float) -> None:
+                                  delay: float) -> None:
     """Query a status message's servers and update the message"""
     await asyncio.sleep(delay)
     try:
@@ -592,26 +596,24 @@ async def _refresh_server_message(client: _Client, db_message: ServerMessage,
     if not db_servers:
         return
 
-    components = await asyncio.gather(*(_refresh_server(s, timeout)
+    components = await asyncio.gather(*(_refresh_server(s)
                                         for s in db_servers))
     await _update_server_message(client, db_message, components)
 
-async def _refresh_servers(client: _Client, interval: float, timeout: float
-                           ) -> None:
+async def _refresh_servers(client: _Client, interval: float) -> None:
     """Queue server status message updates"""
     db_messages = await ServerMessage.all()
+    timeout = get_a2s().timeout or 0
     spread = interval - (timeout + _SERVER_MESSAGE_SLACK)
     step = spread / max(len(db_messages), 1)
     for i, db_message in enumerate(db_messages):
         delay = i * step
-        _create_task(_refresh_server_message(client, db_message, delay,
-                                             timeout),
+        _create_task(_refresh_server_message(client, db_message, delay),
                      name=f'refresh server message {db_message.channel_id}')
 
-async def _refresh_server_loop(client: _Client, interval: float,
-                               timeout: float) -> None:
+async def _refresh_server_loop(client: _Client, interval: float) -> None:
     """Wrapper to avoid hikari-arc's 4 failure limit in IntervalLoop"""
     try:
-        await _refresh_servers(client, interval, timeout)
+        await _refresh_servers(client, interval)
     except Exception:
         _logger.exception('Refreshing servers failed')

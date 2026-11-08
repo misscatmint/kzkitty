@@ -9,11 +9,12 @@ from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
                          SectionComponentBuilder, ThumbnailComponentBuilder)
 
-from kzkitty.api import a2s
+from kzkitty.api.a2s import A2S, QueryGame, QueryInvalidAddressError
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 from kzkitty.models import Mode, Type
 if TYPE_CHECKING:
+    from kzkitty.api.a2s import QueryServer
     from kzkitty.models import Player, Server
 
 _STATUS_MAX_PLAYERS = 10
@@ -269,7 +270,7 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest] | None
     container.add_component(gallery)
     return container
 
-async def server_component(server: a2s.Server, api: API | None,
+async def server_component(server: QueryServer, api: API | None,
                            api_map: APIMap | None, location: str | None=None,
                            truncate: bool=False
                            ) -> ContainerComponentBuilder:
@@ -278,8 +279,8 @@ async def server_component(server: a2s.Server, api: API | None,
     else:
         map_name = server.full_map_name.replace('_', r'\_')
     port = f':{server.port}' if server.port != 27015 else ''
-    game = {str(a2s.Game.CSGO): 'CSGO',
-            str(a2s.Game.CS2): 'CS2'}.get(server.game, server.game)
+    game = {str(QueryGame.CSGO): 'CSGO',
+            str(QueryGame.CS2): 'CS2'}.get(server.game, server.game)
     body = f"""## {server.name} ({game})
 
 **IP**: {server.host}{port}"""
@@ -330,8 +331,8 @@ def server_unavailable_component(db_server: Server, reason: str
                                  ) -> ContainerComponentBuilder:
     result_time = datetime.now(tz=UTC)
     try:
-        host, port = a2s.parse_address(db_server.address)
-    except a2s.QueryInvalidAddressError:
+        host, port = A2S.parse_address(db_server.address)
+    except QueryInvalidAddressError:
         address = db_server.address
     else:
         address = host if port == 27015 else f'{host}:{port}'
