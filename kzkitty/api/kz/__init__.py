@@ -6,11 +6,11 @@ from kzkitty.api.kz.base import (API, APIDataError, APIError, APIHTTPError,
                                  Rank, PersonalBest, Profile)
 from kzkitty.api.kz.csgo import CSGOAPI
 from kzkitty.api.kz.cs2 import CS2API
-from kzkitty.models import Mode
+from kzkitty.models import Game, Mode
 
 __all__ = ['API', 'APIDataError', 'APIError', 'APIHTTPError', 'APIMap',
            'APIMapAmbiguousError', 'APIMapError', 'APIMapNotFoundError',
-           'PersonalBest', 'Profile', 'Rank', 'api_for_mode']
+           'PersonalBest', 'Profile', 'Rank', 'api_for_game', 'api_for_mode']
 
 _csgo_api: CSGOAPI | None = None
 _cs2_api: CS2API | None = None
@@ -37,6 +37,14 @@ def api_for_mode(mode: Mode) -> API:
     if _csgo_api is None or _cs2_api is None:
         raise APIUninitializedError
     if mode in {Mode.KZT, Mode.SKZ, Mode.VNL}:
+        return _csgo_api
+    else:
+        return _cs2_api
+
+def api_for_game(game: Game) -> API:
+    if _csgo_api is None or _cs2_api is None:
+        raise APIUninitializedError
+    if game == Game.CSGO:
         return _csgo_api
     else:
         return _cs2_api

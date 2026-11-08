@@ -15,7 +15,7 @@ from kzkitty.api.kz.base import (API, APIDataError, APIError, APIHTTPError,
                                  APIMap, APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank,
                                  RefreshMapDBResult, PersonalBest, Profile)
-from kzkitty.models import Map, Mode, Type
+from kzkitty.models import Game, Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.csgo')
 
@@ -107,6 +107,8 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap, place: int | None=None
                         server=record.server_name)
 
 class CSGOAPI(API):
+    game = Game.CSGO
+
     @override
     def __init__(self, timeout: int | None=None) -> None:
         self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
@@ -114,6 +116,15 @@ class CSGOAPI(API):
     @override
     async def close(self) -> None:
         await self._session.clear()
+
+    @override
+    async def is_up(self) -> bool:
+        url = 'https://kztimerglobal.com/api/v2.0/maps?limit=1'
+        try:
+            r = await self._session.request('GET', url, retries=False)
+        except HTTPError:
+            return False
+        return r.status == 200
 
     async def _skz_filters(self, api_maps: list[_APIMap]) -> dict[int, bool]:
         url = ('https://kztimerglobal.com/api/v2.0/record_filters?'

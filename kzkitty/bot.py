@@ -24,16 +24,18 @@ from kzkitty.api.a2s import (QueryA2SError, QueryGame,
                              QueryTimeoutError, close_a2s, get_a2s, init_a2s)
 from kzkitty.api.kz import (API, APIError, APIHTTPError, APIMap,
                             APIMapError, APIMapNotFoundError,
-                            APIMapAmbiguousError, api_for_mode, close_api,
-                            init_api, refresh_map_db)
+                            APIMapAmbiguousError, api_for_game, api_for_mode,
+                            close_api, init_api, refresh_map_db)
 from kzkitty.api.steam import (SteamError, SteamProfileNotFound,
                                SteamValueError, close_steam, get_steam,
                                init_steam)
-from kzkitty.components import (map_component, pb_component,
-                                profile_component, server_component,
+from kzkitty.components import (api_status_component, map_component,
+                                pb_component, profile_component,
+                                server_component,
                                 server_unavailable_component)
-from kzkitty.models import (Course, Map, Mode, Player, Server, ServerMessage,
-                            Type, close_db, import_defaults, init_db)
+from kzkitty.models import (Course, Game, Map, Mode, Player, Server,
+                            ServerMessage, Type, close_db, import_defaults,
+                            init_db)
 
 type _Client = Client[Any]
 type _Context = Context[Any]
@@ -497,8 +499,10 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
         return
 
     api, api_map = await _get_server_map(server, preferred_mode)
+    api_up = await api.is_up() if api is not None else None
     component = await server_component(server, api, api_map,
-                                       location=location)
+                                       location=location, show_time=False,
+                                       api_up=api_up)
     await ctx.respond(component=component)
 
 async def _update_server_message(client: _Client, db_message: ServerMessage,
@@ -599,9 +603,13 @@ async def _refresh_server_message(client: _Client, db_message: ServerMessage,
     if not db_servers:
         return
 
-    components = await asyncio.gather(*(_refresh_server(s)
-                                        for s in db_servers))
-    await _update_server_message(client, db_message, components)
+    games = [g for g in Game if g in {s.game for s in db_servers}]
+    server_components, api_statuses = await asyncio.gather(
+        asyncio.gather(*(_refresh_server(s) for s in db_servers)),
+        asyncio.gather(*(api_for_game(g).is_up() for g in games)))
+    status = api_status_component(list(zip(games, api_statuses, strict=True)))
+    await _update_server_message(client, db_message,
+                                 [*server_components, status])
 
 async def _refresh_servers(client: _Client, interval: float) -> None:
     """Queue server status message updates"""

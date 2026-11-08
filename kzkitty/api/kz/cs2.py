@@ -13,7 +13,7 @@ from kzkitty.api.kz.base import (API, APIDataError, APIHTTPError, APIMap,
                                  APIMapAmbiguousError, APIMapError,
                                  APIMapNotFoundError, Rank,
                                  RefreshMapDBResult, PersonalBest, Profile)
-from kzkitty.models import Course, Map, Mode, Type
+from kzkitty.models import Course, Game, Map, Mode, Type
 
 _logger = logging.getLogger('kzkitty.api.kz.cs2')
 
@@ -128,6 +128,8 @@ def _record_to_pb(record: _APIRecord, api_map: APIMap) -> PersonalBest:
                         server=record.server.name)
 
 class CS2API(API):
+    game = Game.CS2
+
     @override
     def __init__(self, timeout: int | None=None) -> None:
         self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
@@ -135,6 +137,15 @@ class CS2API(API):
     @override
     async def close(self) -> None:
         await self._session.clear()
+
+    @override
+    async def is_up(self) -> bool:
+        url = 'https://api.cs2kz.org/maps?limit=1'
+        try:
+            r = await self._session.request('GET', url, retries=False)
+        except HTTPError:
+            return False
+        return r.status == 200
 
     @override
     async def refresh_map_db(self) -> RefreshMapDBResult:

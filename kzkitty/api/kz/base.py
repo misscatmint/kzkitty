@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import NamedTuple, TYPE_CHECKING
+from typing import ClassVar, NamedTuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
 
-from kzkitty.models import Map, Mode, Type
+from kzkitty.models import Game, Map, Mode, Type
 
 class APIError(Exception):
     pass
@@ -102,12 +102,18 @@ class RefreshMapDBResult(NamedTuple):
     deleted: int
 
 class API(ABC):
+    game: ClassVar[Game]
+
     @abstractmethod
     def __init__(self, timeout: int | None=None) -> None:
         ...
 
     @abstractmethod
     async def close(self) -> None:
+        ...
+
+    @abstractmethod
+    async def is_up(self) -> bool:
         ...
 
     @abstractmethod

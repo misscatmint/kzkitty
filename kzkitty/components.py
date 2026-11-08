@@ -7,12 +7,13 @@ if TYPE_CHECKING:
 from hikari import Color, User
 from hikari.impl import (ContainerComponentBuilder,
                          MediaGalleryComponentBuilder,
-                         SectionComponentBuilder, ThumbnailComponentBuilder)
+                         SectionComponentBuilder, TextDisplayComponentBuilder,
+                         ThumbnailComponentBuilder)
 
 from kzkitty.api.a2s import A2S, QueryGame, QueryInvalidAddressError
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
-from kzkitty.models import Mode, Type
+from kzkitty.models import Game, Mode, Type
 if TYPE_CHECKING:
     from kzkitty.api.a2s import QueryServer
     from kzkitty.models import Player, Server
@@ -270,9 +271,16 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest] | None
     container.add_component(gallery)
     return container
 
+def api_status_component(api_statuses: list[tuple[Game, bool]]
+                         ) -> TextDisplayComponentBuilder:
+    statuses = [f"{game} API {'✅' if is_up else '❌'}"
+                for game, is_up in api_statuses]
+    return TextDisplayComponentBuilder(content=f"-# {' · '.join(statuses)}")
+
 async def server_component(server: QueryServer, api: API | None,
                            api_map: APIMap | None, location: str | None=None,
-                           truncate: bool=False
+                           truncate: bool=False, show_time: bool=True,
+                           api_up: bool | None=None
                            ) -> ContainerComponentBuilder:
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
@@ -324,7 +332,11 @@ async def server_component(server: QueryServer, api: API | None,
         container.add_component(section)
     else:
         container.add_text_display(body)
-    container.add_text_display(f'-# <t:{int(server.queried_at.timestamp())}>')
+    if show_time:
+        container.add_text_display(
+            f'-# <t:{int(server.queried_at.timestamp())}>')
+    if api is not None and api_up is not None:
+        container.add_component(api_status_component([(api.game, api_up)]))
     return container
 
 def server_unavailable_component(db_server: Server, reason: str
