@@ -356,19 +356,19 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hikari", extras = ["server"], specifier = ">=2.6.0" },
+    { name = "hikari", extras = ["server"], specifier = ">=2.7.0" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.2" },
-    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=c4514bb19590ee7f7b88e4d3010070f41c3285f5" },
-    { name = "pydantic", specifier = ">=2.14.1" },
+    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=de0a0903a94282f349d99bfd183109ea11a70aa2" },
+    { name = "pydantic", specifier = ">=2.14.3" },
     { name = "tortoise-orm", specifier = ">=1.1.9" },
-    { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.25.903" },
+    { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.25.905" },
     { name = "uvloop", specifier = ">=0.23.0" },
 ]
 
 [[package]]
 name = "little-a2s"
 version = "0.7.3"
-source = { git = "https://github.com/misscatmint/little-a2s.git?rev=c4514bb19590ee7f7b88e4d3010070f41c3285f5#c4514bb19590ee7f7b88e4d3010070f41c3285f5" }
+source = { git = "https://github.com/misscatmint/little-a2s.git?rev=de0a0903a94282f349d99bfd183109ea11a70aa2#de0a0903a94282f349d99bfd183109ea11a70aa2" }
 
 [[package]]
 name = "multidict"
