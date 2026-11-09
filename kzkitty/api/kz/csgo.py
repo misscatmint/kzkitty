@@ -110,10 +110,8 @@ class CSGOAPI(API):
     game = Game.CSGO
 
     @override
-    def __init__(self, timeout: int | None=None,
-                 slow_timeout: int | None=None) -> None:
+    def __init__(self, timeout: int | None=None) -> None:
         self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
-        self._slow_timeout = slow_timeout
 
     @override
     async def close(self) -> None:
@@ -133,8 +131,7 @@ class CSGOAPI(API):
                'mode_ids=201&stages=0&tickrates=128&has_teleports=false&'
                'limit=9999')
         try:
-            r = await self._session.request('GET', url,
-                                            timeout=self._slow_timeout)
+            r = await self._session.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API SKZ record filters "
                                    f'(HTTP {r.status})')
@@ -170,8 +167,7 @@ class CSGOAPI(API):
     async def _vnl_tiers(self) -> dict[int, tuple[int, int]]:
         url = 'https://vnlkz.com/api/maps'
         try:
-            r = await self._session.request('GET', url,
-                                            timeout=self._slow_timeout)
+            r = await self._session.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get VNL API maps "
                                    f'(HTTP {r.status})')
@@ -188,8 +184,7 @@ class CSGOAPI(API):
     async def refresh_map_db(self) -> RefreshMapDBResult:
         url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
         try:
-            r = await self._session.request('GET', url,
-                                            timeout=self._slow_timeout)
+            r = await self._session.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API maps "
                                    f'(HTTP {r.status})')
@@ -304,8 +299,7 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
         try:
-            r = await self._session.request('GET', url,
-                                            timeout=self._slow_timeout)
+            r = await self._session.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API PBs "
                                    f'(HTTP {r.status})')

@@ -68,8 +68,8 @@ async def _refresh_map_db_loop() -> None:
         _logger.exception('Map database refresh failed')
 
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
-           refresh_server_mins: int, api_timeout: int, api_slow_timeout: int,
-           steam_timeout: int, a2s_timeout: int) -> None:
+           refresh_server_mins: int, api_timeout: int, steam_timeout: int,
+           a2s_timeout: int) -> None:
     """Register bot commands and hooks"""
     if a2s_timeout + _SERVER_MESSAGE_SLACK >= refresh_server_mins * 60:
         raise ValueError(f'a2s_timeout ({a2s_timeout}s) plus '
@@ -94,7 +94,7 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
                                         minutes=refresh_server_mins,
                                         run_on_start=True)
     async def startup(client: _Client) -> None:
-        init_api(timeout=api_timeout, slow_timeout=api_slow_timeout)
+        init_api(timeout=api_timeout)
         init_a2s(timeout=a2s_timeout)
         init_steam(timeout=steam_timeout)
         await init_db(db_url)
@@ -114,27 +114,26 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
     client.add_shutdown_hook(shutdown)
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
-        refresh_server_mins: int=1, api_timeout: int=3,
-        api_slow_timeout: int=15, steam_timeout: int=5, a2s_timeout: int=5
-        ) -> None:
+        refresh_server_mins: int=1, api_timeout: int=3, steam_timeout: int=5,
+        a2s_timeout: int=5) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
     bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
-           api_slow_timeout, steam_timeout, a2s_timeout)
+           steam_timeout, a2s_timeout)
     bot.run(check_for_updates=False)
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
             refresh_db_hours: int=24, refresh_server_mins: int=1,
-            api_timeout: int=3, api_slow_timeout: int=15,
-            steam_timeout: int=5, a2s_timeout: int=5) -> None:
+            api_timeout: int=3, steam_timeout: int=5, a2s_timeout: int=5
+            ) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
                   suppress_optimization_warning=True)
     client = RESTClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
-           api_slow_timeout, steam_timeout, a2s_timeout)
+           steam_timeout, a2s_timeout)
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
