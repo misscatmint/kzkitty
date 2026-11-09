@@ -358,7 +358,7 @@ dependencies = [
 requires-dist = [
     { name = "hikari", extras = ["server"], specifier = ">=2.7.0" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.2" },
-    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=de0a0903a94282f349d99bfd183109ea11a70aa2" },
+    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "tortoise-orm", specifier = ">=1.1.9" },
     { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.25.905" },
@@ -368,7 +368,7 @@ requires-dist = [
 [[package]]
 name = "little-a2s"
 version = "0.7.3"
-source = { git = "https://github.com/misscatmint/little-a2s.git?rev=de0a0903a94282f349d99bfd183109ea11a70aa2#de0a0903a94282f349d99bfd183109ea11a70aa2" }
+source = { git = "https://github.com/misscatmint/little-a2s.git?rev=7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0#7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0" }
 
 [[package]]
 name = "multidict"

@@ -16,7 +16,7 @@ dependencies = [
 
 [tool.uv.sources.little-a2s]
 git = "https://github.com/misscatmint/little-a2s.git"
-rev = "de0a0903a94282f349d99bfd183109ea11a70aa2"
+rev = "7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0"
 
 [tool.basedpyright]
 pythonVersion = "3.15"
