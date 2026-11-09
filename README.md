@@ -55,7 +55,9 @@ Setting `channel_id` will make the bot keep one auto-updating status message
 in that channel, covering every server with that `channel_id`. Set
 `message_id` on any of those rows to reuse an existing message instead of
 posting a new one. Rows for the same channel can't have different
-`message_id`s. `is_default` controls what server `/server` uses by default.
+`message_id`s. To show a server in more than one channel, give it one row per
+channel. The first row's details (name, location, etc.) are used for all of
+them. `is_default` controls what server `/server` uses by default.
 
 `KZKITTY_REFRESH_DB_HOURS` can optionally be used to control how frequently
 the map cache is updated from the global APIs. The default is 24 hours.

@@ -13,7 +13,7 @@ from hikari.impl import (ContainerComponentBuilder,
 from kzkitty.api.a2s import A2S, QueryGame, QueryInvalidAddressError
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
-from kzkitty.models import Game, Mode, Type
+from kzkitty.models import Game, Mode, QueryFailure, Type
 if TYPE_CHECKING:
     from kzkitty.api.a2s import QueryServer
     from kzkitty.models import Player, Server
@@ -339,9 +339,16 @@ async def server_component(server: QueryServer, api: API | None,
         container.add_component(api_status_component([(api.game, api_up)]))
     return container
 
-def server_unavailable_component(db_server: Server, reason: str
+def server_unavailable_component(db_server: Server,
+                                 failure: QueryFailure | None
                                  ) -> ContainerComponentBuilder:
     result_time = datetime.now(tz=UTC)
+    if failure is None:
+        reason = 'Not queried yet'
+    else:
+        reason = {QueryFailure.INVALID_ADDRESS: 'Invalid server address',
+                  QueryFailure.TIMED_OUT: 'Server query timed out',
+                  QueryFailure.FAILED: 'Server query failed'}[failure]
     try:
         host, port = A2S.parse_address(db_server.address)
     except QueryInvalidAddressError:

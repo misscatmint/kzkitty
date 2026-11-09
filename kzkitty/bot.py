@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime
 from typing import Annotated, Any, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from collections.abc import Coroutine, Sequence
@@ -33,9 +34,9 @@ from kzkitty.components import (api_status_component, map_component,
                                 pb_component, profile_component,
                                 server_component,
                                 server_unavailable_component)
-from kzkitty.models import (Course, Game, Map, Mode, Player, Server,
-                            ServerMessage, Type, close_db, import_defaults,
-                            init_db)
+from kzkitty.models import (APIStatus, Course, Game, Map, Mode, Player,
+                            QueryFailure, Server, ServerMessage, Type,
+                            close_db, import_defaults, init_db)
 
 type _Client = Client[Any]
 type _Context = Context[Any]
@@ -555,84 +556,97 @@ async def _update_server_message(client: _Client, db_message: ServerMessage,
             _logger.info('server message %s channel %s not found',
                          message.id, db_message.channel_id)
 
-async def _query_server(db_server: Server) -> QueryServer:
-    """Query a server, falling back to its last result until it counts as down.
-
-    The query's exception propagates if there's no result to fall back to.
-    """
+async def _query_server(db_server: Server) -> None:
+    """Query a server and save its result, or why the query failed"""
     a2s = get_a2s()
     try:
         host, port = a2s.parse_address(db_server.address)
         server = await a2s.query_server(host, port)
-    except Exception as e:
-        expected = isinstance(e, (QueryInvalidAddressError |
-                                  QueryTimeoutError))
-        _logger.info('a2s query to %s failed: %r', db_server.address, e,
-                     exc_info=not expected)
-        db_server.failure_count += 1
-        await db_server.save(update_fields=['failure_count'])
-        if (db_server.last_query is None
-            or db_server.failure_count >= _SERVER_DOWN_FAILURES):
-            raise
-        return QueryServer.from_dict(db_server.last_query)
+    except QueryInvalidAddressError:
+        _logger.info('a2s query to %s failed: invalid address',
+                     db_server.address)
+        failure = QueryFailure.INVALID_ADDRESS
+    except QueryTimeoutError:
+        _logger.info('a2s query to %s timed out', db_server.address)
+        failure = QueryFailure.TIMED_OUT
+    except Exception:
+        _logger.info('a2s query to %s failed', db_server.address,
+                     exc_info=True)
+        failure = QueryFailure.FAILED
+    else:
+        db_server.last_query = server.to_dict()
+        db_server.failure_count = 0
+        await db_server.save(update_fields=['last_query', 'failure_count'])
+        return
 
-    db_server.last_query = server.to_dict()
-    db_server.failure_count = 0
-    await db_server.save(update_fields=['last_query', 'failure_count'])
-    return server
+    db_server.failure_count += 1
+    db_server.last_failure = failure
+    await db_server.save(update_fields=['failure_count', 'last_failure'])
 
-async def _refresh_server(db_server: Server) -> ComponentBuilder:
-    """Query a server and build its status component"""
+async def _server_status_component(db_server: Server) -> ComponentBuilder:
+    """Build a server's status component from its saved query"""
+    last_query = db_server.last_query
+    if (last_query is None
+        or db_server.failure_count >= _SERVER_DOWN_FAILURES):
+        return server_unavailable_component(db_server, db_server.last_failure)
     try:
-        server = await _query_server(db_server)
+        server = QueryServer.from_dict(last_query)
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
         return await server_component(server, api, api_map,
                                       location=db_server.location,
                                       truncate=True)
-    except QueryInvalidAddressError:
-        reason = 'Invalid server address'
-    except QueryTimeoutError:
-        reason = 'Server query timed out'
     except Exception:
         # Anything raised here would stop the other servers' updates too.
-        _logger.exception('Refreshing %s failed', db_server.address)
-        reason = 'Server query failed'
-    return server_unavailable_component(db_server, reason)
+        _logger.exception('Rendering %s failed', db_server.address)
+        return server_unavailable_component(db_server, QueryFailure.FAILED)
 
 async def _refresh_server_message(client: _Client, db_message: ServerMessage,
-                                  delay: float,
-                                  api_statuses: list[tuple[Game, bool]]
-                                  ) -> None:
-    """Query a status message's servers and update the message"""
+                                  delay: float) -> None:
+    """Update a status message from its servers' saved queries"""
     await asyncio.sleep(delay)
     try:
         await db_message.refresh_from_db()
     except DoesNotExist:
         return
-    db_servers = await (Server.filter(status_message=db_message)
-                              .order_by('id'))
+    db_servers = await db_message.servers.all().order_by('id')
     if not db_servers:
         return
 
-    server_components = await asyncio.gather(*(_refresh_server(s)
+    server_components = await asyncio.gather(*(_server_status_component(s)
                                                for s in db_servers))
-    status = api_status_component(api_statuses)
+    api_statuses = {s.game: s.is_up for s in await APIStatus.all()}
+    status = api_status_component([(g, api_statuses[g]) for g in Game
+                                   if g in api_statuses])
     await _update_server_message(client, db_message,
                                  [*server_components, status])
 
 async def _refresh_servers(client: _Client, interval: float) -> None:
-    """Queue server status message updates"""
-    db_messages = await ServerMessage.all()
+    """Query servers and APIs, then queue status message updates"""
+    db_servers = await (Server.filter(messages__id__isnull=False)
+                              .distinct())
     games = list(Game)
-    are_up = await asyncio.gather(*(_api_is_up(g) for g in games))
-    api_statuses = list(zip(games, are_up, strict=True))
+    query_results, are_up = await asyncio.gather(
+        asyncio.gather(*(_query_server(s) for s in db_servers),
+                       return_exceptions=True),
+        asyncio.gather(*(_api_is_up(g) for g in games)))
+    for db_server, result in zip(db_servers, query_results, strict=True):
+        if isinstance(result, BaseException):
+            _logger.error('Saving the query for %s failed', db_server.address,
+                          exc_info=result)
+    checked_at = datetime.now(tz=UTC)
+    for game, is_up in zip(games, are_up, strict=True):
+        await APIStatus.update_or_create( # pyright: ignore[reportUnknownMemberType]
+                                         game=game,
+                                         defaults={'is_up': is_up,
+                                                   'checked_at': checked_at})
+
+    db_messages = await ServerMessage.all()
     timeout = get_a2s().timeout or 0
     spread = interval - (timeout + _SERVER_MESSAGE_SLACK)
     step = spread / max(len(db_messages), 1)
     for i, db_message in enumerate(db_messages):
         delay = i * step
-        _create_task(_refresh_server_message(client, db_message, delay,
-                                             api_statuses),
+        _create_task(_refresh_server_message(client, db_message, delay),
                      name=f'refresh server message {db_message.channel_id}')
 
 async def _refresh_server_loop(client: _Client, interval: float) -> None:

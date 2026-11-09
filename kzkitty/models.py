@@ -58,9 +58,15 @@ class Game(StrEnum):
     CSGO = 'CSGO'
     CS2 = 'CS2'
 
+class QueryFailure(StrEnum):
+    INVALID_ADDRESS = 'invalid address'
+    TIMED_OUT = 'timed out'
+    FAILED = 'failed'
+
 class ServerMessage(Model):
     channel_id: fields.Field[int] = fields.BigIntField()
     message_id: fields.Field[int | None] = fields.BigIntField(null=True)
+    servers: fields.ManyToManyRelation[Server]
 
 class Server(Model):
     name = fields.CharField(max_length=255)
@@ -69,16 +75,22 @@ class Server(Model):
     preferred_mode = fields.CharEnumField(Mode, null=True)
     location = fields.CharField(max_length=255)
     server_id: fields.Field[int] = fields.BigIntField()
-    status_message: fields.ForeignKeyNullableRelation[ServerMessage] = (
-        fields.ForeignKeyField('models.ServerMessage', related_name='servers',
-                               null=True, on_delete=fields.SET_NULL))
+    messages: fields.ManyToManyRelation[ServerMessage] = (
+        fields.ManyToManyField('models.ServerMessage',
+                               related_name='servers'))
     is_default = fields.BooleanField(default=False)
     failure_count = fields.IntField(default=0)
+    last_failure = fields.CharEnumField(QueryFailure, null=True)
     last_query: fields.JSONField[QueryServerData | None] = (
         fields.JSONField(null=True))
 
     class Meta: # pyright: ignore # pyrefly: ignore # ty: ignore
         unique_together = ('address', 'server_id')
+
+class APIStatus(Model):
+    game = fields.CharEnumField(Game, unique=True)
+    is_up = fields.BooleanField()
+    checked_at = fields.DatetimeField()
 
 async def init_db(db_url: str) -> None:
     await Tortoise.init(db_url=db_url, modules={'models': ['kzkitty.models']},
@@ -127,7 +139,7 @@ async def _import_default_servers() -> None:
     if default_server_file is None:
         return
 
-    servers: list[Server] = []
+    new_servers = 0
     with open(default_server_file, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
@@ -140,19 +152,21 @@ async def _import_default_servers() -> None:
             channel_id = int(row['channel_id']) if row['channel_id'] else None
             message_id = int(row['message_id']) if row['message_id'] else None
             is_default = bool(int(row['is_default']))
-            if not await Server.exists(address=address, server_id=server_id):
-                status_message = (
-                    await _status_message_for_channel(channel_id, message_id)
-                    if channel_id is not None else None)
-                servers.append(Server(name=name, address=address,
-                                      location=location, game=game,
-                                      preferred_mode=preferred_mode,
-                                      server_id=server_id,
-                                      status_message=status_message,
-                                      is_default=is_default))
-    await Server.bulk_create(servers)
-    if servers:
-        _logger.info('Imported %d server(s) from %s', len(servers),
+            db_server = await Server.get_or_none(address=address,
+                                                 server_id=server_id)
+            if db_server is None:
+                db_server = await Server.create(name=name, address=address,
+                                                location=location, game=game,
+                                                preferred_mode=preferred_mode,
+                                                server_id=server_id,
+                                                is_default=is_default)
+                new_servers += 1
+            if channel_id is not None:
+                db_message = await _status_message_for_channel(channel_id,
+                                                               message_id)
+                await db_server.messages.add(db_message)
+    if new_servers:
+        _logger.info('Imported %d server(s) from %s', new_servers,
                      default_server_file)
 
 async def import_defaults() -> None:
