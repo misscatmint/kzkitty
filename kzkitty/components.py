@@ -10,7 +10,8 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, TextDisplayComponentBuilder,
                          ThumbnailComponentBuilder)
 
-from kzkitty.api.a2s import A2S, QueryGame, QueryInvalidAddressError
+from kzkitty.api.a2s import (A2S, QueryAppID, QueryGame,
+                             QueryInvalidAddressError)
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 from kzkitty.models import Game, Mode, QueryFailure, Type
@@ -294,6 +295,9 @@ async def server_component(server: QueryServer, api: API | None,
 **IP**: {server.host}{port}"""
     if location:
         body += f' ({location})'
+    if server.app_id == QueryAppID.CS2 and server.game == QueryGame.CSGO:
+        body += """
+**Branch**: csgo_legacy"""
     body += f"""
 **Map**: {map_name}"""
     if api_map is not None:

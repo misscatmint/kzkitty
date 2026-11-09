@@ -4,7 +4,7 @@ import posixpath
 import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 from little_a2s import AsyncA2S, Error as A2SError
 from pydantic import JsonValue, TypeAdapter, ValidationError
@@ -33,6 +33,10 @@ class QueryGame(StrEnum):
     CSGO = 'Counter-Strike: Global Offensive'
     CS2 = 'Counter-Strike 2'
 
+class QueryAppID(IntEnum):
+    CS2 = 730
+    CSGO = 4465480
+
 @dataclass
 class QueryPlayer:
     name: str
@@ -43,6 +47,7 @@ class QueryServer:
     host: str
     ip: str
     port: int
+    app_id: int
     game: str
     name: str
     full_map_name: str
@@ -141,8 +146,9 @@ class A2S:
         players = [QueryPlayer(p.name,
                                duration=timedelta(seconds=p.duration))
                    for p in player_info.players]
-        return QueryServer(host=host, ip=ip, port=port, game=info.game,
-                           name=info.name, full_map_name=info.map,
+        return QueryServer(host=host, ip=ip, port=port, app_id=info.id,
+                           game=info.game, name=info.name,
+                           full_map_name=info.map,
                            map_name=posixpath.basename(info.map),
                            player_count=info.players,
                            max_players=info.max_players, players=players,
