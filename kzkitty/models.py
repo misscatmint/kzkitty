@@ -6,6 +6,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from tortoise import Model, Tortoise, fields
+
+from kzkitty.api.a2s import QueryInvalidAddressError, parse_address
 if TYPE_CHECKING:
     from kzkitty.api.a2s import QueryServerData
 
@@ -146,6 +148,11 @@ async def _import_default_servers() -> None:
         for row in reader:
             name = row['name']
             address = row['address']
+            try:
+                parse_address(address)
+            except QueryInvalidAddressError:
+                raise ValueError(f'Invalid server address {address!r} in '
+                                 f'{default_server_file}') from None
             location = row['location']
             game = row['game']
             preferred_mode = row['preferred_mode'] or None

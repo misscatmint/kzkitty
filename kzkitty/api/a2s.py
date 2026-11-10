@@ -104,8 +104,6 @@ async def _resolve_address(host: str, port: int) -> tuple[str, int]:
     return ip_addr, port
 
 def parse_address(address: str) -> tuple[str, int]:
-    if address.startswith('['):
-        raise QueryInvalidAddressError
     parts = address.split(':', 1)
     if len(parts) == 2:
         host, portstr = parts
@@ -115,7 +113,7 @@ def parse_address(address: str) -> tuple[str, int]:
         port = int(portstr)
     else:
         host, port = address, 27015
-    if not host:
+    if _HOSTNAME.fullmatch(host) is None:
         raise QueryInvalidAddressError
     return host, port
 
