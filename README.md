@@ -147,6 +147,10 @@ services:
       - TZ=America/Chicago
     volumes:
       - './etc-kzkitty:/etc/kzkitty'
+    healthcheck:
+      test: ["CMD", "python", "-m", "kzkitty", "healthcheck"]
+      interval: 30s
+      timeout: 10s
 
   kzkitty-sidecar:
     container_name: kzkitty-sidecar
@@ -179,8 +183,12 @@ volumes:
 ```
 
 The sidecar reuses the image built for the bot, so only `kzkitty` has a
-`build` section. Next to `compose.yaml`, create a `Caddyfile` that sends join
-links to the sidecar and everything else to the bot:
+`build` section. The health check marks the bot as unhealthy in `docker ps`
+if its web server stops answering. Docker doesn't restart unhealthy
+containers on its own, so it's only a status label.
+
+Next to `compose.yaml`, create a `Caddyfile` that sends join links to the
+sidecar and everything else to the bot:
 
 ```
 kzkitty.example.com {

@@ -4,6 +4,7 @@ import os
 import sys
 
 from kzkitty import sidecar
+from kzkitty.api.http import HTTPError, make_http_pool
 from kzkitty.api.kz import close_api, init_api, refresh_map_db
 from kzkitty.bot import run, runrest
 from kzkitty.models import (close_db, dump_players, export_default_players,
@@ -19,6 +20,21 @@ def _address(value: str) -> tuple[str, int]:
     if not host or not port.isdecimal() or not 0 < int(port) < 65536:
         raise ValueError(f'Expected host:port, got {value!r}')
     return host, int(port)
+
+async def _healthcheck() -> None:
+    """Exit with an error unless the REST bot's web server is answering"""
+    rest = os.environ.get('KZKITTY_REST')
+    if not rest:
+        sys.exit('KZKITTY_REST is not set')
+    host, port = _address(_DEFAULT_REST_ADDRESS if rest == '1' else rest)
+    pool = make_http_pool(timeout=3)
+    try:
+        # Any HTTP response (hikari answers GET with 405) means it's up.
+        await pool.request('GET', f'http://{host}:{port}/', retries=False)
+    except HTTPError as e:
+        sys.exit(f'REST bot not answering on {host}:{port}: {e}')
+    finally:
+        await pool.clear()
 
 async def _refresh(db_url: str, api_timeout: int) -> None:
     init_api(timeout=api_timeout)
@@ -66,6 +82,9 @@ def main(args: list[str]) -> None:
             return
         elif args[0] == 'dump':
             asyncio.run(_dump(db_url))
+            return
+        elif args[0] == 'healthcheck':
+            asyncio.run(_healthcheck())
             return
 
     discord_token = os.environ['KZKITTY_DISCORD_TOKEN']
