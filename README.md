@@ -47,7 +47,7 @@ Similarly, set `KZKITTY_DEFAULT_SERVERS` to a CSV file in the following
 format:
 
 ```csv
-name,address,game,location,server_id,channel_id,message_id,is_default
+name,address,game,preferred_mode,location,server_id,channel_id,message_id,is_default
 ...
 ```
 
