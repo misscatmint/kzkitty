@@ -132,17 +132,17 @@ class CS2API(API):
 
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
+        self._pool: AsyncPoolManager = make_http_pool(timeout=timeout)
 
     @override
     async def close(self) -> None:
-        await self._session.clear()
+        await self._pool.clear()
 
     @override
     async def is_up(self) -> bool:
         url = 'https://api.cs2kz.org/maps?limit=1'
         try:
-            r = await self._session.request('GET', url, retries=False)
+            r = await self._pool.request('GET', url, retries=False)
         except HTTPError:
             return False
         return r.status == 200
@@ -151,7 +151,7 @@ class CS2API(API):
     async def refresh_map_db(self) -> RefreshMapDBResult:
         url = 'https://api.cs2kz.org/maps'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API maps "
                                    f'(HTTP {r.status})')
@@ -266,7 +266,7 @@ class CS2API(API):
         query = urlencode(params)
         url = f'https://api.cs2kz.org/records?{query}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API PBs "
                                    f'(HTTP {r.status})')
@@ -331,7 +331,7 @@ class CS2API(API):
         if course_id is None:
             url = f'https://api.cs2kz.org/maps/{quote(name)}'
             try:
-                r = await self._session.request('GET', url)
+                r = await self._pool.request('GET', url)
                 if r.status == 404:
                     raise APIMapNotFoundError('Map not found')
                 elif r.status != 200:
@@ -397,7 +397,7 @@ class CS2API(API):
     async def get_workshop_thumbnail_url(self, name: str) -> str | None:
         url = _workshop_thumbnail_url(name)
         try:
-            r = await self._session.request('HEAD', url)
+            r = await self._pool.request('HEAD', url)
             if r.status == 200:
                 return url
         except HTTPError:
@@ -447,7 +447,7 @@ class CS2API(API):
         player_url = _profile_url(steamid64)
         url = f'https://api.cs2kz.org/players/{steamid64}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status == 200:
                 json = await r.data
             elif r.status == 404:

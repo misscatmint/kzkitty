@@ -111,17 +111,17 @@ class CSGOAPI(API):
 
     @override
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
+        self._pool: AsyncPoolManager = make_http_pool(timeout=timeout)
 
     @override
     async def close(self) -> None:
-        await self._session.clear()
+        await self._pool.clear()
 
     @override
     async def is_up(self) -> bool:
         url = 'https://kztimerglobal.com/api/v2.0/maps?limit=1'
         try:
-            r = await self._session.request('GET', url, retries=False)
+            r = await self._pool.request('GET', url, retries=False)
         except HTTPError:
             return False
         return r.status == 200
@@ -131,7 +131,7 @@ class CSGOAPI(API):
                'mode_ids=201&stages=0&tickrates=128&has_teleports=false&'
                'limit=9999')
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API SKZ record filters "
                                    f'(HTTP {r.status})')
@@ -149,7 +149,7 @@ class CSGOAPI(API):
     async def _vnl_tiers_for_map(self, map_name: str) -> tuple[int, int]:
         url = f'https://vnlkz.com/api/maps/{quote(map_name)}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status == 404:
                 return 10, 10
             elif r.status != 200:
@@ -167,7 +167,7 @@ class CSGOAPI(API):
     async def _vnl_tiers(self) -> dict[int, tuple[int, int]]:
         url = 'https://vnlkz.com/api/maps'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get VNL API maps "
                                    f'(HTTP {r.status})')
@@ -184,7 +184,7 @@ class CSGOAPI(API):
     async def refresh_map_db(self) -> RefreshMapDBResult:
         url = 'https://kztimerglobal.com/api/v2.0/maps?limit=9999'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API maps "
                                    f'(HTTP {r.status})')
@@ -299,7 +299,7 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API PBs "
                                    f'(HTTP {r.status})')
@@ -328,7 +328,7 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/records/top?{query}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API WR "
                                    f'(HTTP {r.status})')
@@ -344,7 +344,7 @@ class CSGOAPI(API):
     async def _place_for_pb(self, pb: PersonalBest) -> int:
         url = f'https://kztimerglobal.com/api/v2.0/records/place/{pb.id}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API PB place "
                                    f'(HTTP {r.status})')
@@ -384,7 +384,7 @@ class CSGOAPI(API):
         else:
             url = f'https://kztimerglobal.com/api/v2.0/maps/name/{quote(name)}'
             try:
-                r = await self._session.request('GET', url)
+                r = await self._pool.request('GET', url)
                 if r.status != 200:
                     raise APIHTTPError("Couldn't get global API map "
                                        f'(HTTP {r.status})')
@@ -406,7 +406,7 @@ class CSGOAPI(API):
                    f'map_ids={api_map.id}&mode_ids=201&stages=0&tickrates=128'
                    '&has_teleports=false&limit=1')
             try:
-                r = await self._session.request('GET', url)
+                r = await self._pool.request('GET', url)
                 if r.status != 200:
                     raise APIHTTPError("Couldn't get global API SKZ record "
                                        f'filter (HTTP {r.status})')
@@ -558,7 +558,7 @@ class CSGOAPI(API):
         query = urlencode(params)
         url = f'https://kztimerglobal.com/api/v2.0/player_ranks?{query}'
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise APIHTTPError("Couldn't get global API ranks "
                                    f'(HTTP {r.status})')

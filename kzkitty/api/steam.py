@@ -25,14 +25,14 @@ class SteamProfile:
 
 class Steam:
     def __init__(self, timeout: int | None=None) -> None:
-        self._session: AsyncPoolManager = make_http_pool(timeout=timeout)
+        self._pool: AsyncPoolManager = make_http_pool(timeout=timeout)
 
     async def close(self) -> None:
-        await self._session.clear()
+        await self._pool.clear()
 
     async def _get_profile(self, url: str) -> ElementTree.Element[str]:
         try:
-            r = await self._session.request('GET', url)
+            r = await self._pool.request('GET', url)
             if r.status != 200:
                 raise SteamError("Couldn't get Steam profile "
                                  f'(HTTP {r.status})')
