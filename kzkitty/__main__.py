@@ -3,12 +3,22 @@ import logging
 import os
 import sys
 
+from kzkitty import sidecar
 from kzkitty.api.kz import close_api, init_api, refresh_map_db
 from kzkitty.bot import run, runrest
 from kzkitty.models import (close_db, dump_players, export_default_players,
                             init_db)
 
+_DEFAULT_REST_ADDRESS = '0.0.0.0:8080'
+_DEFAULT_SIDECAR_ADDRESS = '0.0.0.0:8081'
+
 _logger = logging.getLogger('kzkitty')
+
+def _address(value: str) -> tuple[str, int]:
+    host, _, port = value.rpartition(':')
+    if not host or not port.isdecimal() or not 0 < int(port) < 65536:
+        raise ValueError(f'Expected host:port, got {value!r}')
+    return host, int(port)
 
 async def _refresh(db_url: str, api_timeout: int) -> None:
     init_api(timeout=api_timeout)
@@ -59,19 +69,27 @@ def main(args: list[str]) -> None:
             return
 
     discord_token = os.environ['KZKITTY_DISCORD_TOKEN']
+    if args and args[0] == 'sidecar':
+        host, port = _address(os.environ.get('KZKITTY_SIDECAR',
+                                             _DEFAULT_SIDECAR_ADDRESS))
+        sidecar.run(discord_token, db_url, host, port)
+        return
+
     refresh_db_hours = int(os.environ.get('KZKITTY_REFRESH_DB_HOURS', 24))
     refresh_server_mins = int(os.environ.get('KZKITTY_REFRESH_SERVER_MINS',
                                              1))
     steam_timeout = int(os.environ.get('KZKITTY_STEAM_TIMEOUT', 5))
     a2s_timeout = int(os.environ.get('KZKITTY_A2S_TIMEOUT', 5))
+    connect_url = os.environ.get('KZKITTY_CONNECT_URL', '').rstrip('/') or None
     rest = os.environ.get('KZKITTY_REST')
     if rest:
-        host, port = rest.split(':', 1)
-        runrest(host, int(port), discord_token, db_url, refresh_db_hours,
-                refresh_server_mins, api_timeout, steam_timeout, a2s_timeout)
+        host, port = _address(_DEFAULT_REST_ADDRESS if rest == '1' else rest)
+        runrest(host, port, discord_token, db_url, refresh_db_hours,
+                refresh_server_mins, api_timeout, steam_timeout, a2s_timeout,
+                connect_url)
     else:
         run(discord_token, db_url, refresh_db_hours, refresh_server_mins,
-            api_timeout, steam_timeout, a2s_timeout)
+            api_timeout, steam_timeout, a2s_timeout, connect_url)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

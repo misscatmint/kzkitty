@@ -20,9 +20,10 @@ from tortoise.expressions import Q
 if TYPE_CHECKING:
     from hikari.api import ComponentBuilder
 
-from kzkitty.api.a2s import (QueryA2SError, QueryGame,
+from kzkitty.api.a2s import (QueryA2SError, QueryAppID, QueryGame,
                              QueryInvalidAddressError, QueryServer,
-                             QueryTimeoutError, close_a2s, get_a2s, init_a2s)
+                             QueryTimeoutError, close_a2s, get_a2s, init_a2s,
+                             parse_address)
 from kzkitty.api.kz import (API, APIError, APIHTTPError, APIMap,
                             APIMapError, APIMapNotFoundError,
                             APIMapAmbiguousError, api_for_game, api_for_mode,
@@ -30,7 +31,8 @@ from kzkitty.api.kz import (API, APIError, APIHTTPError, APIMap,
 from kzkitty.api.steam import (SteamError, SteamProfileNotFound,
                                SteamValueError, close_steam, get_steam,
                                init_steam)
-from kzkitty.components import (api_status_component, map_component,
+from kzkitty.components import (api_status_component,
+                                connect_hint_component, map_component,
                                 pb_component, profile_component,
                                 server_component,
                                 server_unavailable_component)
@@ -45,6 +47,8 @@ _SERVER_MESSAGE_SLACK = 5
 _SERVER_DOWN_FAILURES = 5
 
 _logger = logging.getLogger('kzkitty.bot')
+
+_connect_url: str | None = None
 
 _tasks: set[asyncio.Task[Any]] = set()
 
@@ -69,8 +73,10 @@ async def _refresh_map_db_loop() -> None:
 
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            refresh_server_mins: int, api_timeout: int, steam_timeout: int,
-           a2s_timeout: int) -> None:
+           a2s_timeout: int, connect_url: str | None) -> None:
     """Register bot commands and hooks"""
+    global _connect_url
+    _connect_url = connect_url
     if a2s_timeout + _SERVER_MESSAGE_SLACK >= refresh_server_mins * 60:
         raise ValueError(f'a2s_timeout ({a2s_timeout}s) plus '
                          f'{_SERVER_MESSAGE_SLACK}s server message slack '
@@ -115,25 +121,25 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
         refresh_server_mins: int=1, api_timeout: int=3, steam_timeout: int=5,
-        a2s_timeout: int=5) -> None:
+        a2s_timeout: int=5, connect_url: str | None=None) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
     bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
-           steam_timeout, a2s_timeout)
+           steam_timeout, a2s_timeout, connect_url)
     bot.run(check_for_updates=False)
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
             refresh_db_hours: int=24, refresh_server_mins: int=1,
-            api_timeout: int=3, steam_timeout: int=5, a2s_timeout: int=5
-            ) -> None:
+            api_timeout: int=3, steam_timeout: int=5, a2s_timeout: int=5,
+            connect_url: str | None=None) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
                   suppress_optimization_warning=True)
     client = RESTClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
-           steam_timeout, a2s_timeout)
+           steam_timeout, a2s_timeout, connect_url)
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
@@ -493,7 +499,7 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
 
     a2s = get_a2s()
     try:
-        host, port = a2s.parse_address(address)
+        host, port = parse_address(address)
         server = await a2s.query_server(host, port)
     except QueryA2SError:
         _logger.exception('a2s query failed for %s', address)
@@ -509,9 +515,13 @@ async def _slash_server(ctx: _Context, address: _MaybeAddressOption=None
 
     api, api_map = await _get_server_map(server, preferred_mode)
     api_up = await _api_is_up(api.game) if api is not None else None
+    ip_link = (_ip_link(db_server, server) if db_server is not None
+               else None)
     component = await server_component(server, api, api_map,
                                        location=location, show_time=False,
-                                       api_up=api_up)
+                                       api_up=api_up, ip_link=ip_link)
+    if _needs_connect_hint(server, ip_link):
+        component.add_component(connect_hint_component())
     await ctx.respond(component=component)
 
 async def _update_server_message(client: _Client, db_message: ServerMessage,
@@ -559,7 +569,7 @@ async def _query_server(db_server: Server) -> None:
     """Query a server and save its result, or why the query failed"""
     a2s = get_a2s()
     try:
-        host, port = a2s.parse_address(db_server.address)
+        host, port = parse_address(db_server.address)
         server = await a2s.query_server(host, port)
     except QueryInvalidAddressError:
         _logger.info('a2s query to %s failed: invalid address',
@@ -582,22 +592,39 @@ async def _query_server(db_server: Server) -> None:
     db_server.last_failure = failure
     await db_server.save(update_fields=['failure_count', 'last_failure'])
 
-async def _server_status_component(db_server: Server) -> ComponentBuilder:
-    """Build a server's status component from its saved query"""
+def _ip_link(db_server: Server, server: QueryServer) -> str | None:
+    """Link to the sidecar's redirect for joining the server, if possible"""
+    if _connect_url is None or server.connect_url() is None:
+        return None
+    return f'{_connect_url}/connect/{db_server.id}'
+
+def _needs_connect_hint(server: QueryServer, ip_link: str | None) -> bool:
+    # Steam drops the connect command if it has to start standalone CS:GO.
+    return ip_link is not None and server.app_id == QueryAppID.CSGO
+
+async def _server_status_component(db_server: Server
+                                   ) -> tuple[ComponentBuilder, bool]:
+    """Build a server's status component from its saved query, and whether it
+    needs the connect hint"""
     last_query = db_server.last_query
     if (last_query is None
         or db_server.failure_count >= _SERVER_DOWN_FAILURES):
-        return server_unavailable_component(db_server, db_server.last_failure)
+        return (server_unavailable_component(db_server,
+                                             db_server.last_failure),
+                False)
     try:
         server = QueryServer.from_dict(last_query)
         api, api_map = await _get_server_map(server, db_server.preferred_mode)
-        return await server_component(server, api, api_map,
-                                      location=db_server.location,
-                                      truncate=True)
+        ip_link = _ip_link(db_server, server)
+        component = await server_component(server, api, api_map,
+                                           location=db_server.location,
+                                           truncate=True, ip_link=ip_link)
+        return component, _needs_connect_hint(server, ip_link)
     except Exception:
         # Anything raised here would stop the other servers' updates too.
         _logger.exception('Rendering %s failed', db_server.address)
-        return server_unavailable_component(db_server, QueryFailure.FAILED)
+        return (server_unavailable_component(db_server, QueryFailure.FAILED),
+                False)
 
 async def _refresh_server_message(client: _Client, db_message: ServerMessage,
                                   delay: float) -> None:
@@ -611,13 +638,16 @@ async def _refresh_server_message(client: _Client, db_message: ServerMessage,
     if not db_servers:
         return
 
-    server_components = await asyncio.gather(*(_server_status_component(s)
-                                               for s in db_servers))
+    results = await asyncio.gather(*(_server_status_component(s)
+                                     for s in db_servers))
     api_statuses = {s.game: s.is_up for s in await APIStatus.all()}
-    status = api_status_component([(g, api_statuses[g]) for g in Game
-                                   if g in api_statuses])
-    await _update_server_message(client, db_message,
-                                 [*server_components, status])
+    components = [component for component, _ in results]
+    components.append(api_status_component([(g, api_statuses[g])
+                                            for g in Game
+                                            if g in api_statuses]))
+    if any(needs_hint for _, needs_hint in results):
+        components.append(connect_hint_component())
+    await _update_server_message(client, db_message, components)
 
 async def _refresh_servers(client: _Client, interval: float) -> None:
     """Query servers and APIs, then queue status message updates"""

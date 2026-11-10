@@ -69,8 +69,26 @@ To control timeouts, set `KZKITTY_API_TIMEOUT`, `KZKITTY_STEAM_TIMEOUT`, and
 `KZKITTY_A2S_TIMEOUT` (in seconds). They default to 3, 5, and 5 seconds
 respectively.
 
-Set `KZKITTY_REST` to an `address:port` to run the bot as a REST bot. Note
-that this will require an internet-facing HTTPS server to proxy to kzkitty.
+Set `KZKITTY_REST` to an `address:port` to run the bot as a REST bot, or to
+`1` to listen on `0.0.0.0:8080`. This requires an internet-facing HTTPS server
+to proxy to kzkitty (see [Deploying as a REST bot](#deploying-as-a-rest-bot)).
+
+`KZKITTY_CONNECT_URL` can be set to the public URL of the sidecar (see below)
+to turn server IPs into links that launch the game and join the server. This
+works for CS2 servers and the standalone CS:GO app. Servers on the
+`csgo_legacy` beta branch of CS2 are shown with a note instead, since a link
+can't choose that branch.
+
+The sidecar is a second process that shows the bot as online (REST bots can't
+do this themselves) and serves the join links. Run it with:
+
+```sh
+KZKITTY_DB=sqlite://kzkitty.db KZKITTY_DISCORD_TOKEN=... \
+    uv run -m kzkitty sidecar
+```
+
+It listens on `KZKITTY_SIDECAR` (an `address:port`, defaulting to
+`0.0.0.0:8081`) and uses the same database as the bot.
 
 ## Deployment
 
@@ -101,6 +119,91 @@ build and start the service:
 ```sh
 docker compose up --build -d kzkitty
 ```
+
+### Deploying as a REST bot
+
+Running as a REST bot needs three services: the bot, the sidecar, and an HTTPS
+server in front of both. This example uses Caddy, which gets a certificate
+for your domain automatically. Replace `kzkitty.example.com` with a domain
+pointing at your server:
+
+```yaml
+services:
+  kzkitty:
+    container_name: kzkitty
+    restart: unless-stopped
+    user: "1000:1000"
+    build:
+      context: ~/src/kzkitty
+      dockerfile: Dockerfile
+    image: kzkitty
+    environment:
+      - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
+      - KZKITTY_DEFAULT_PLAYERS=/etc/kzkitty/players.csv
+      - KZKITTY_DEFAULT_SERVERS=/etc/kzkitty/servers.csv
+      - KZKITTY_DISCORD_TOKEN=...
+      - KZKITTY_REST=1
+      - KZKITTY_CONNECT_URL=https://kzkitty.example.com
+      - TZ=America/Chicago
+    volumes:
+      - './etc-kzkitty:/etc/kzkitty'
+
+  kzkitty-sidecar:
+    container_name: kzkitty-sidecar
+    restart: unless-stopped
+    user: "1000:1000"
+    image: kzkitty
+    command: ["python", "-m", "kzkitty", "sidecar"]
+    environment:
+      - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
+      - KZKITTY_DISCORD_TOKEN=...
+    volumes:
+      - './etc-kzkitty:/etc/kzkitty'
+
+  caddy:
+    container_name: caddy
+    restart: unless-stopped
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - './Caddyfile:/etc/caddy/Caddyfile:ro'
+      - 'caddy-data:/data'
+      - 'caddy-config:/config'
+
+volumes:
+  caddy-data:
+  caddy-config:
+```
+
+The sidecar reuses the image built for the bot, so only `kzkitty` has a
+`build` section. Next to `compose.yaml`, create a `Caddyfile` that sends join
+links to the sidecar and everything else to the bot:
+
+```
+kzkitty.example.com {
+	handle /connect/* {
+		reverse_proxy kzkitty-sidecar:8081
+	}
+	handle {
+		reverse_proxy kzkitty:8080
+	}
+}
+```
+
+Build and start everything:
+
+```sh
+docker compose up --build -d
+```
+
+Finally, in the Discord developer portal, set the application's
+"Interactions Endpoint URL" to `https://kzkitty.example.com/`. Discord checks
+the URL when you save it, so the bot must already be running.
+
+### Discord application
 
 Note that you will need to visit https://discord.com/developers/applications
 to create an application for the bot. This will give you the Discord token

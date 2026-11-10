@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import posixpath
+import re
 import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -10,6 +11,8 @@ from little_a2s import AsyncA2S, Error as A2SError
 from pydantic import JsonValue, TypeAdapter, ValidationError
 
 type QueryServerData = dict[str, JsonValue]
+
+_HOSTNAME = re.compile(r'[A-Za-z0-9.-]+')
 
 class QueryError(Exception):
     pass
@@ -57,6 +60,16 @@ class QueryServer:
     players: list[QueryPlayer]
     queried_at: datetime
 
+    def connect_url(self) -> str | None:
+        if not (self.app_id == QueryAppID.CSGO or
+                (self.app_id == QueryAppID.CS2 and
+                 self.game == QueryGame.CS2)):
+            return None
+        # The host ends up in a console command, so only allow host characters.
+        if _HOSTNAME.fullmatch(self.host) is None:
+            return None
+        return f'steam://run/{self.app_id}//+connect%20{self.host}:{self.port}'
+
     def to_dict(self) -> QueryServerData:
         data: QueryServerData = _ServerAdapter.dump_python(self, mode='json')
         return data
@@ -90,6 +103,22 @@ async def _resolve_address(host: str, port: int) -> tuple[str, int]:
         raise QueryInvalidAddressError
     return ip_addr, port
 
+def parse_address(address: str) -> tuple[str, int]:
+    if address.startswith('['):
+        raise QueryInvalidAddressError
+    parts = address.split(':', 1)
+    if len(parts) == 2:
+        host, portstr = parts
+        portstr = portstr or '27015'
+        if not portstr.isascii() or not portstr.isdecimal():
+            raise QueryInvalidAddressError
+        port = int(portstr)
+    else:
+        host, port = address, 27015
+    if not host:
+        raise QueryInvalidAddressError
+    return host, port
+
 class A2S:
     def __init__(self, timeout: float | None=None) -> None:
         self._client: AsyncA2S | None = None
@@ -109,23 +138,6 @@ class A2S:
                 await client.start()
                 self._client = client
             return self._client
-
-    @staticmethod
-    def parse_address(address: str) -> tuple[str, int]:
-        if address.startswith('['):
-            raise QueryInvalidAddressError
-        parts = address.split(':', 1)
-        if len(parts) == 2:
-            host, portstr = parts
-            portstr = portstr or '27015'
-            if not portstr.isascii() or not portstr.isdecimal():
-                raise QueryInvalidAddressError
-            port = int(portstr)
-        else:
-            host, port = address, 27015
-        if not host:
-            raise QueryInvalidAddressError
-        return host, port
 
     async def query_server(self, host: str, port: int | None) -> QueryServer:
         port = port if port is not None else 27015

@@ -10,8 +10,8 @@ from hikari.impl import (ContainerComponentBuilder,
                          SectionComponentBuilder, TextDisplayComponentBuilder,
                          ThumbnailComponentBuilder)
 
-from kzkitty.api.a2s import (A2S, QueryAppID, QueryGame,
-                             QueryInvalidAddressError)
+from kzkitty.api.a2s import (QueryAppID, QueryGame, QueryInvalidAddressError,
+                             parse_address)
 from kzkitty.api.kz import API, APIMap, PersonalBest, Profile, Rank
 from kzkitty.api.steam import SteamError, get_steam
 from kzkitty.models import Game, Mode, QueryFailure, Type
@@ -272,6 +272,11 @@ def map_component(api_map: APIMap, wrs: list[PersonalBest] | None
     container.add_component(gallery)
     return container
 
+def connect_hint_component() -> TextDisplayComponentBuilder:
+    body = ("-# *If CSGO isn't already open, click the IP again after the "
+            'game starts.*')
+    return TextDisplayComponentBuilder(content=body)
+
 def api_status_component(api_statuses: list[tuple[Game, bool]]
                          ) -> TextDisplayComponentBuilder:
     statuses = [f"{game} API {'✅' if is_up else '❌'}"
@@ -281,7 +286,7 @@ def api_status_component(api_statuses: list[tuple[Game, bool]]
 async def server_component(server: QueryServer, api: API | None,
                            api_map: APIMap | None, location: str | None=None,
                            truncate: bool=False, show_time: bool=True,
-                           api_up: bool | None=None
+                           api_up: bool | None=None, ip_link: str | None=None
                            ) -> ContainerComponentBuilder:
     if api_map is not None:
         map_name = f'[{server.full_map_name}]({api_map.url})'
@@ -290,9 +295,12 @@ async def server_component(server: QueryServer, api: API | None,
     port = f':{server.port}' if server.port != 27015 else ''
     game = {str(QueryGame.CSGO): 'CSGO',
             str(QueryGame.CS2): 'CS2'}.get(server.game, server.game)
+    address = f'{server.host}{port}'
+    if ip_link is not None:
+        address = f'[{address}]({ip_link})'
     body = f"""## {server.name} ({game})
 
-**IP**: {server.host}{port}"""
+**IP**: {address}"""
     if location:
         body += f' ({location})'
     if server.app_id == QueryAppID.CS2 and server.game == QueryGame.CSGO:
@@ -354,7 +362,7 @@ def server_unavailable_component(db_server: Server,
                   QueryFailure.TIMED_OUT: 'Server query timed out',
                   QueryFailure.FAILED: 'Server query failed'}[failure]
     try:
-        host, port = A2S.parse_address(db_server.address)
+        host, port = parse_address(db_server.address)
     except QueryInvalidAddressError:
         address = db_server.address
     else:

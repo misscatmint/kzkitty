@@ -5,6 +5,7 @@ description = "Discord bot for the CS:GO and CS2 KZ global APIs."
 readme = "README.md"
 requires-python = ">=3.15.2"
 dependencies = [
+    "aiohttp>=3.14.5",
     "hikari-arc[rest]>=2.3.2",
     "hikari[server]>=2.7.0",
     "little-a2s>=0.7.3",

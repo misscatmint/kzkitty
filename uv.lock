@@ -345,6 +345,7 @@ name = "kzkitty"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "hikari", extra = ["server"] },
     { name = "hikari-arc", extra = ["rest"] },
     { name = "little-a2s" },
@@ -356,6 +357,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14.5" },
     { name = "hikari", extras = ["server"], specifier = ">=2.7.0" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.2" },
     { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0" },
