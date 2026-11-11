@@ -360,7 +360,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.5" },
     { name = "hikari", extras = ["server"], specifier = ">=2.7.0" },
     { name = "hikari-arc", extras = ["rest"], specifier = ">=2.3.2" },
-    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0" },
+    { name = "little-a2s", git = "https://github.com/misscatmint/little-a2s.git?rev=ad8d74af56e0fd82af1716ad910a552175da40b2" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "tortoise-orm", specifier = ">=1.1.9" },
     { name = "urllib3-future", extras = ["brotli", "zstd"], specifier = ">=2.25.905" },
@@ -370,7 +370,7 @@ requires-dist = [
 [[package]]
 name = "little-a2s"
 version = "0.7.3"
-source = { git = "https://github.com/misscatmint/little-a2s.git?rev=7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0#7f16f16ca76b6028ba6b7d90a8e25f90efe8abf0" }
+source = { git = "https://github.com/misscatmint/little-a2s.git?rev=ad8d74af56e0fd82af1716ad910a552175da40b2#ad8d74af56e0fd82af1716ad910a552175da40b2" }
 
 [[package]]
 name = "multidict"

@@ -156,7 +156,7 @@ class A2S:
         players = [QueryPlayer(p.name,
                                duration=timedelta(seconds=p.duration))
                    for p in player_info.players]
-        return QueryServer(host=host, ip=ip, port=port, app_id=info.id,
+        return QueryServer(host=host, ip=ip, port=port, app_id=info.app_id,
                            game=info.game, name=info.name,
                            full_map_name=info.map,
                            map_name=posixpath.basename(info.map),
