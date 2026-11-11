@@ -194,7 +194,8 @@ kzkitty.example.com {
 	handle /connect/* {
 		reverse_proxy kzkitty-sidecar:8081
 	}
-	handle {
+	handle /interactions {
+		rewrite * /
 		reverse_proxy kzkitty:8080
 	}
 }
@@ -207,8 +208,8 @@ docker compose up --build -d
 ```
 
 Finally, in the Discord developer portal, set the application's
-"Interactions Endpoint URL" to `https://kzkitty.example.com/`. Discord checks
-the URL when you save it, so the bot must already be running.
+"Interactions Endpoint URL" to `https://kzkitty.example.com/interactions`.
+Discord checks the URL when you save it, so the bot must already be running.
 
 If Caddy logs a permission error binding ports 80 or 443, add
 `sysctls: [net.ipv4.ip_unprivileged_port_start=0]` to the `caddy` service.
