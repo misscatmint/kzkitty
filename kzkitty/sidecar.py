@@ -46,7 +46,7 @@ def run(discord_token: str, db_url: str, host: str, port: int) -> None:
         try:
             await runner.setup()
             await web.TCPSite(runner, host, port).start()
-        except BaseException:
+        except:
             # The open database would otherwise keep the process from exiting.
             await close_db()
             raise
