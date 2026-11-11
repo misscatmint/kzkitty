@@ -157,6 +157,7 @@ services:
   kzkitty-sidecar:
     <<: *hardening
     container_name: kzkitty-sidecar
+    build: https://github.com/misscatmint/kzkitty.git
     image: kzkitty
     command: ["python", "-m", "kzkitty", "sidecar"]
     environment:
