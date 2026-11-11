@@ -6,7 +6,7 @@ import sys
 from kzkitty import sidecar
 from kzkitty.api.http import HTTPError, make_http_pool
 from kzkitty.api.kz import close_api, init_api, refresh_map_db
-from kzkitty.bot import run, runrest
+from kzkitty.bot import HEALTHCHECK_USER_AGENT, run, runrest
 from kzkitty.models import (close_db, dump_players, export_default_players,
                             init_db)
 
@@ -30,7 +30,8 @@ async def _healthcheck() -> None:
     pool = make_http_pool(timeout=3)
     try:
         # Any HTTP response (hikari answers GET with 405) means it's up.
-        await pool.request('GET', f'http://{host}:{port}/', retries=False)
+        await pool.request('GET', f'http://{host}:{port}/', retries=False,
+                           headers={'User-Agent': HEALTHCHECK_USER_AGENT})
     except HTTPError as e:
         sys.exit(f'REST bot not answering on {host}:{port}: {e}')
     finally:

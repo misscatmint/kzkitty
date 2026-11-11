@@ -46,6 +46,8 @@ type _Context = Context[Any]
 _SERVER_MESSAGE_SLACK = 5
 _SERVER_DOWN_FAILURES = 5
 
+HEALTHCHECK_USER_AGENT = 'kzkitty-healthcheck'
+
 _logger = logging.getLogger('kzkitty.bot')
 
 _public_url: str | None = None
@@ -140,6 +142,9 @@ def runrest(host: str, port: int, discord_token: str, db_url: str,
     client = RESTClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
            steam_timeout, a2s_timeout, public_url)
+    # The health check would otherwise be in the access log every 30 seconds.
+    logging.getLogger('hikari.interaction_server').addFilter(
+        lambda record: HEALTHCHECK_USER_AGENT not in record.getMessage())
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
