@@ -95,26 +95,34 @@ It listens on `KZKITTY_SIDECAR` (an `address:port`, defaulting to
 To deploy with Docker Compose, use a `compose.yaml` file:
 
 ```yaml
+name: kzkitty
+
+x-hardening: &hardening
+  restart: unless-stopped
+  user: "1000:1000"
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
 services:
   kzkitty:
+    <<: *hardening
     container_name: kzkitty
-    restart: unless-stopped
-    user: "1000:1000"
-    build:
-      context: ~/src/kzkitty
-      dockerfile: Dockerfile
+    build: https://github.com/misscatmint/kzkitty.git
     environment:
-      - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
-      - KZKITTY_DEFAULT_PLAYERS=/etc/kzkitty/players.csv
-      - KZKITTY_DEFAULT_SERVERS=/etc/kzkitty/servers.csv
-      - KZKITTY_DISCORD_TOKEN=...
-      - TZ=America/Chicago
+      KZKITTY_DB: sqlite:///data/kzkitty.db
+      KZKITTY_DEFAULT_PLAYERS: /data/players.csv
+      KZKITTY_DEFAULT_SERVERS: /data/servers.csv
+      KZKITTY_DISCORD_TOKEN: ${KZKITTY_DISCORD_TOKEN}
     volumes:
-      - './etc-kzkitty:/etc/kzkitty'
+      - /etc/localtime:/etc/localtime:ro
+      - ./data:/data
 ```
 
-Change `TZ` to the timezone to use for nightly map database refreshes. Then
-build and start the service:
+Put the Discord token in a `.env` file next to `compose.yaml`
+(`KZKITTY_DISCORD_TOKEN=...`), and the CSV files in `./data`, which must be
+writable by uid 1000. The bot uses the host's timezone (from
+`/etc/localtime`) for nightly map database refreshes. Then build and start the
+service:
 
 ```sh
 docker compose up --build -d kzkitty
@@ -125,70 +133,68 @@ docker compose up --build -d kzkitty
 Running as a REST bot needs three services: the bot, the sidecar, and an HTTPS
 server in front of both. This example uses Caddy, which gets a certificate
 for your domain automatically. Replace `kzkitty.example.com` with a domain
-pointing at your server:
+pointing at your server. With the same `x-logging` and `x-hardening` blocks as
+above:
 
 ```yaml
 services:
   kzkitty:
+    <<: *hardening
     container_name: kzkitty
-    restart: unless-stopped
-    user: "1000:1000"
-    build:
-      context: ~/src/kzkitty
-      dockerfile: Dockerfile
+    build: https://github.com/misscatmint/kzkitty.git
     image: kzkitty
     environment:
-      - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
-      - KZKITTY_DEFAULT_PLAYERS=/etc/kzkitty/players.csv
-      - KZKITTY_DEFAULT_SERVERS=/etc/kzkitty/servers.csv
-      - KZKITTY_DISCORD_TOKEN=...
-      - KZKITTY_REST=1
-      - KZKITTY_CONNECT_URL=https://kzkitty.example.com
-      - TZ=America/Chicago
-    volumes:
-      - './etc-kzkitty:/etc/kzkitty'
+      KZKITTY_CONNECT_URL: https://kzkitty.example.com
+      KZKITTY_DB: sqlite:///data/kzkitty.db
+      KZKITTY_DEFAULT_PLAYERS: /data/players.csv
+      KZKITTY_DEFAULT_SERVERS: /data/servers.csv
+      KZKITTY_DISCORD_TOKEN: ${KZKITTY_DISCORD_TOKEN}
+      KZKITTY_REST: 1
     healthcheck:
       test: ["CMD", "python", "-m", "kzkitty", "healthcheck"]
       interval: 30s
       timeout: 10s
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data:/data
 
   kzkitty-sidecar:
+    <<: *hardening
     container_name: kzkitty-sidecar
-    restart: unless-stopped
-    user: "1000:1000"
     image: kzkitty
     command: ["python", "-m", "kzkitty", "sidecar"]
     environment:
-      - KZKITTY_DB=sqlite:///etc/kzkitty/kzkitty.db
-      - KZKITTY_DISCORD_TOKEN=...
+      KZKITTY_DB: sqlite:///data/kzkitty.db
+      KZKITTY_DISCORD_TOKEN: ${KZKITTY_DISCORD_TOKEN}
     volumes:
-      - './etc-kzkitty:/etc/kzkitty'
+      - /etc/localtime:/etc/localtime:ro
+      - ./data:/data
 
   caddy:
+    <<: *hardening
     container_name: caddy
-    restart: unless-stopped
     image: caddy:2
+    command: ["caddy", "run", "--config", "/data/Caddyfile",
+              "--adapter", "caddyfile"]
+    environment:
+      XDG_CONFIG_HOME: /data/config
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
-      - './Caddyfile:/etc/caddy/Caddyfile:ro'
-      - 'caddy-data:/data'
-      - 'caddy-config:/config'
-
-volumes:
-  caddy-data:
-  caddy-config:
+      - ./caddy:/data
 ```
 
 The sidecar reuses the image built for the bot, so only `kzkitty` has a
-`build` section. The health check marks the bot as unhealthy in `docker ps`
-if its web server stops answering. Docker doesn't restart unhealthy
-containers on its own, so it's only a status label.
+`build` section, and it shares the bot's `./data` folder to read the same
+database. Caddy keeps its config, certificates and saved state in `./caddy`,
+which must also be writable by uid 1000. The health check marks the bot as
+unhealthy in `docker ps` if its web server stops answering. Docker doesn't
+restart unhealthy containers on its own, so it's only a status label.
 
-Next to `compose.yaml`, create a `Caddyfile` that sends join links to the
-sidecar and everything else to the bot:
+Create `./caddy/Caddyfile`, which sends join links to the sidecar and
+everything else to the bot:
 
 ```
 kzkitty.example.com {
@@ -210,6 +216,23 @@ docker compose up --build -d
 Finally, in the Discord developer portal, set the application's
 "Interactions Endpoint URL" to `https://kzkitty.example.com/`. Discord checks
 the URL when you save it, so the bot must already be running.
+
+If Caddy logs a permission error binding ports 80 or 443, add
+`sysctls: [net.ipv4.ip_unprivileged_port_start=0]` to the `caddy` service.
+
+### Rootless Docker
+
+Under rootless Docker, change `user` in `x-hardening` to `"0:0"`. Container
+root maps to your own (unprivileged) user, which owns `./data` and `./caddy`,
+while uid 1000 would map to a subordinate ID that can't write them. Rootless
+Docker also can't publish host ports below 1024 by default, so allow them for
+Caddy on the host:
+
+```sh
+echo 'net.ipv4.ip_unprivileged_port_start=80' \
+    | sudo tee /etc/sysctl.d/99-rootless-ports.conf
+sudo sysctl --system
+```
 
 ### Discord application
 
