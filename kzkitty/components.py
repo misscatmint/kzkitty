@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from kzkitty.api.a2s import QueryServer
     from kzkitty.models import Player, Server
 
-_STATUS_MAX_PLAYERS = 10
+_STATUS_MAX_PLAYERS = 8
 _STATUS_MAX_PLAYER_NAME = 20
 
 _logger = logging.getLogger('kzkitty.components')
