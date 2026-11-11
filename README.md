@@ -88,7 +88,7 @@ KZKITTY_DB=sqlite://kzkitty.db KZKITTY_DISCORD_TOKEN=... \
 ```
 
 It listens on `KZKITTY_SIDECAR` (an `address:port`, defaulting to
-`0.0.0.0:8081`) and uses the same database as the bot.
+`0.0.0.0:8081`).
 
 ## Deployment
 
@@ -130,11 +130,8 @@ docker compose up --build -d kzkitty
 
 ### Deploying as a REST bot
 
-Running as a REST bot needs three services: the bot, the sidecar, and an HTTPS
-server in front of both. This example uses Caddy, which gets a certificate
-for your domain automatically. Replace `kzkitty.example.com` with a domain
-pointing at your server. With the same `x-logging` and `x-hardening` blocks as
-above:
+Replace `kzkitty.example.com` with a domain pointing at your server, and keep
+the `x-hardening` block from above:
 
 ```yaml
 services:
@@ -186,15 +183,10 @@ services:
       - ./caddy:/data
 ```
 
-The sidecar reuses the image built for the bot, so only `kzkitty` has a
-`build` section, and it shares the bot's `./data` folder to read the same
-database. Caddy keeps its config, certificates and saved state in `./caddy`,
-which must also be writable by uid 1000. The health check marks the bot as
-unhealthy in `docker ps` if its web server stops answering. Docker doesn't
-restart unhealthy containers on its own, so it's only a status label.
+`./caddy` must also be writable by uid 1000. Docker doesn't restart
+containers that fail the health check, so it only affects their status.
 
-Create `./caddy/Caddyfile`, which sends join links to the sidecar and
-everything else to the bot:
+Create `./caddy/Caddyfile`:
 
 ```
 kzkitty.example.com {
