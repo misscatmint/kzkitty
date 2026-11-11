@@ -601,7 +601,7 @@ def _ip_link(db_server: Server, server: QueryServer) -> str | None:
     """Link to the sidecar's redirect for joining the server, if possible"""
     if _public_url is None or server.connect_url() is None:
         return None
-    return f'{_public_url}/connect/{db_server.id}'
+    return f'{_public_url}/connect/{db_server.address}'
 
 def _needs_connect_hint(server: QueryServer, ip_link: str | None) -> bool:
     # Steam drops the connect command if it has to start standalone CS:GO.

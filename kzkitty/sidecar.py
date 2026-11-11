@@ -6,31 +6,37 @@ import logging
 from aiohttp import web
 from hikari import GatewayBot, Intents, StoppingEvent
 
-from kzkitty.api.a2s import QueryServer, QueryServerDataError
+from kzkitty.api.a2s import (QueryInvalidAddressError, QueryServer,
+                             QueryServerDataError, parse_address)
 from kzkitty.models import Server, close_db, init_db
 
 _logger = logging.getLogger('kzkitty.sidecar')
 
 async def _connect(request: web.Request) -> web.Response:
     """Redirect to the Steam URL for joining a server"""
-    db_server = await Server.get_or_none(id=int(request.match_info['id']))
-    if db_server is None or db_server.last_query is None:
-        raise web.HTTPNotFound
+    address = request.match_info['address']
     try:
-        server = QueryServer.from_dict(db_server.last_query)
-    except QueryServerDataError:
+        parse_address(address)
+    except QueryInvalidAddressError:
         raise web.HTTPNotFound from None
-    url = server.connect_url()
-    if url is None:
-        raise web.HTTPNotFound
-    raise web.HTTPFound(url)
+    # The same address can have a row per Discord server.
+    for db_server in await Server.filter(address=address):
+        if db_server.last_query is None:
+            continue
+        try:
+            url = QueryServer.from_dict(db_server.last_query).connect_url()
+        except QueryServerDataError:
+            continue
+        if url is not None:
+            raise web.HTTPFound(url)
+    raise web.HTTPNotFound
 
 def run(discord_token: str, db_url: str, host: str, port: int) -> None:
     """Show the bot as online and serve connect links"""
     bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     app = web.Application()
-    app.add_routes([web.get(r'/connect/{id:\d+}', _connect)])
+    app.add_routes([web.get('/connect/{address}', _connect)])
     runner = web.AppRunner(app)
 
     # Set up before the bot starts so that a failure here exits the process

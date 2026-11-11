@@ -71,7 +71,6 @@ class ServerMessage(Model):
     servers: fields.ManyToManyRelation[Server]
 
 class Server(Model):
-    id: fields.Field[int] = fields.IntField(primary_key=True)
     name = fields.CharField(max_length=255)
     address = fields.CharField(max_length=255)
     game = fields.CharEnumField(Game)
