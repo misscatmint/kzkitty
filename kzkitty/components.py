@@ -367,15 +367,14 @@ def server_unavailable_component(db_server: Server,
         address = db_server.address
     else:
         address = host if port == 27015 else f'{host}:{port}'
-    body = f"""## {db_server.name}
-**IP**: {address} ({db_server.game})"""
-    if db_server.location:
-        body += f"""
-**Location**: {db_server.location}"""
-    body += f"""
-**Status**: {reason}
+    body = f"""## {db_server.name} ({db_server.game})
 
--# <t:{int(result_time.timestamp())}>"""
+**IP**: {address}"""
+    if db_server.location:
+        body += f' ({db_server.location})'
+    body += f"""
+**Status**: {reason}"""
     container = ContainerComponentBuilder()
     container.add_text_display(body)
+    container.add_text_display(f'-# <t:{int(result_time.timestamp())}>')
     return container
