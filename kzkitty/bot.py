@@ -48,7 +48,7 @@ _SERVER_DOWN_FAILURES = 5
 
 _logger = logging.getLogger('kzkitty.bot')
 
-_connect_url: str | None = None
+_public_url: str | None = None
 
 _tasks: set[asyncio.Task[Any]] = set()
 
@@ -73,10 +73,10 @@ async def _refresh_map_db_loop() -> None:
 
 def _setup(client: _Client, db_url: str, refresh_db_hours: int,
            refresh_server_mins: int, api_timeout: int, steam_timeout: int,
-           a2s_timeout: int, connect_url: str | None) -> None:
+           a2s_timeout: int, public_url: str | None) -> None:
     """Register bot commands and hooks"""
-    global _connect_url
-    _connect_url = connect_url
+    global _public_url
+    _public_url = public_url
     if a2s_timeout + _SERVER_MESSAGE_SLACK >= refresh_server_mins * 60:
         raise ValueError(f'a2s_timeout ({a2s_timeout}s) plus '
                          f'{_SERVER_MESSAGE_SLACK}s server message slack '
@@ -121,25 +121,25 @@ def _setup(client: _Client, db_url: str, refresh_db_hours: int,
 
 def run(discord_token: str, db_url: str, refresh_db_hours: int=24,
         refresh_server_mins: int=1, api_timeout: int=3, steam_timeout: int=5,
-        a2s_timeout: int=5, connect_url: str | None=None) -> None:
+        a2s_timeout: int=5, public_url: str | None=None) -> None:
     """Start the bot's main event loop (as a gateway bot)"""
     bot = GatewayBot(discord_token, intents=Intents.NONE, banner=None,
                      suppress_optimization_warning=True)
     client = GatewayClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
-           steam_timeout, a2s_timeout, connect_url)
+           steam_timeout, a2s_timeout, public_url)
     bot.run(check_for_updates=False)
 
 def runrest(host: str, port: int, discord_token: str, db_url: str,
             refresh_db_hours: int=24, refresh_server_mins: int=1,
             api_timeout: int=3, steam_timeout: int=5, a2s_timeout: int=5,
-            connect_url: str | None=None) -> None:
+            public_url: str | None=None) -> None:
     """Start the bot's main event loop (as a REST bot)"""
     bot = RESTBot(discord_token, banner=None,
                   suppress_optimization_warning=True)
     client = RESTClient(bot)
     _setup(client, db_url, refresh_db_hours, refresh_server_mins, api_timeout,
-           steam_timeout, a2s_timeout, connect_url)
+           steam_timeout, a2s_timeout, public_url)
     bot.run(host=host, port=port, check_for_updates=False)
 
 async def _autocomplete_map(data: AutocompleteData[_Client, str]) -> list[str]:
@@ -594,9 +594,9 @@ async def _query_server(db_server: Server) -> None:
 
 def _ip_link(db_server: Server, server: QueryServer) -> str | None:
     """Link to the sidecar's redirect for joining the server, if possible"""
-    if _connect_url is None or server.connect_url() is None:
+    if _public_url is None or server.connect_url() is None:
         return None
-    return f'{_connect_url}/connect/{db_server.id}'
+    return f'{_public_url}/connect/{db_server.id}'
 
 def _needs_connect_hint(server: QueryServer, ip_link: str | None) -> bool:
     # Steam drops the connect command if it has to start standalone CS:GO.

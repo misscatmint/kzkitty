@@ -73,11 +73,10 @@ Set `KZKITTY_REST` to an `address:port` to run the bot as a REST bot, or to
 `1` to listen on `0.0.0.0:8080`. This requires an internet-facing HTTPS server
 to proxy to kzkitty (see [Deploying as a REST bot](#deploying-as-a-rest-bot)).
 
-`KZKITTY_CONNECT_URL` can be set to the public URL of the sidecar (see below)
-to turn server IPs into links that launch the game and join the server. This
-works for CS2 servers and the standalone CS:GO app. Servers on the
-`csgo_legacy` beta branch of CS2 are shown with a note instead, since a link
-can't choose that branch.
+`KZKITTY_URL` can be set to kzkitty's public URL to turn server IPs into links
+that launch the game and join the server. This works for CS2 servers and the
+standalone CS:GO app. Servers on the `csgo_legacy` beta branch of CS2 are
+shown with a note instead, since a link can't choose that branch.
 
 The sidecar is a second process that shows the bot as online (REST bots can't
 do this themselves) and serves the join links. Run it with:
@@ -141,12 +140,12 @@ services:
     build: https://github.com/misscatmint/kzkitty.git
     image: kzkitty
     environment:
-      KZKITTY_CONNECT_URL: https://kzkitty.example.com
       KZKITTY_DB: sqlite:///data/kzkitty.db
       KZKITTY_DEFAULT_PLAYERS: /data/players.csv
       KZKITTY_DEFAULT_SERVERS: /data/servers.csv
       KZKITTY_DISCORD_TOKEN: ${KZKITTY_DISCORD_TOKEN}
       KZKITTY_REST: 1
+      KZKITTY_URL: https://kzkitty.example.com
     healthcheck:
       test: ["CMD", "python", "-m", "kzkitty", "healthcheck"]
       interval: 30s

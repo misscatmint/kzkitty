@@ -99,16 +99,16 @@ def main(args: list[str]) -> None:
                                              1))
     steam_timeout = int(os.environ.get('KZKITTY_STEAM_TIMEOUT', 5))
     a2s_timeout = int(os.environ.get('KZKITTY_A2S_TIMEOUT', 5))
-    connect_url = os.environ.get('KZKITTY_CONNECT_URL', '').rstrip('/') or None
+    public_url = os.environ.get('KZKITTY_URL', '').rstrip('/') or None
     rest = os.environ.get('KZKITTY_REST')
     if rest:
         host, port = _address(_DEFAULT_REST_ADDRESS if rest == '1' else rest)
         runrest(host, port, discord_token, db_url, refresh_db_hours,
                 refresh_server_mins, api_timeout, steam_timeout, a2s_timeout,
-                connect_url)
+                public_url)
     else:
         run(discord_token, db_url, refresh_db_hours, refresh_server_mins,
-            api_timeout, steam_timeout, a2s_timeout, connect_url)
+            api_timeout, steam_timeout, a2s_timeout, public_url)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
