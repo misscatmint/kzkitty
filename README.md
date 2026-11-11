@@ -107,6 +107,7 @@ services:
     <<: *hardening
     container_name: kzkitty
     build: https://github.com/misscatmint/kzkitty.git
+    image: kzkitty
     environment:
       KZKITTY_DB: sqlite:///data/kzkitty.db
       KZKITTY_DEFAULT_PLAYERS: /data/players.csv
